@@ -8,7 +8,8 @@ export interface CreditActor {
 
 /** Two-person control: the operator who approves a credit must not be the one who requested it. */
 export function assertDistinctApprover(requester: CreditActor, approver: CreditActor): void {
-  if (approver.displayName === requester.displayName) {
+  // Compare people, not names: display names are mutable and not unique.
+  if (approver.adminUserId === requester.adminUserId) {
     throw new ConflictError("self_approval_forbidden");
   }
 }
