@@ -11,6 +11,10 @@ export interface PayPaymentLinkInput {
   card: SimulatedCardInput;
   idempotencyKey: string;
   submittedAt?: string;
+  /** Set only when the request carried a valid API key: that key's merchant.
+   *  submittedAt counts only for that merchant's own links (an offline
+   *  terminal); everyone else is judged by the server clock (FP-187). */
+  submittedAtMerchantId?: string;
 }
 
 export interface PayPaymentLinkResult {
@@ -60,7 +64,8 @@ export async function payPaymentLink(
   config: { paymentLinkReservationTimeoutSeconds: number },
   input: PayPaymentLinkInput,
 ): Promise<PayPaymentLinkResult> {
-  const expiryCheckTime = expiryReferenceTime(input.submittedAt);
+  const terminalTime = input.submittedAtMerchantId ? expiryReferenceTime(input.submittedAt) : new Date();
+  const terminalMerchantId = input.submittedAtMerchantId ?? null;
 
   // Step 1 — claim. A single UPDATE is already atomic; no explicit
   // transaction needed.
@@ -73,14 +78,14 @@ export async function payPaymentLink(
              status = 'active'
              OR (status = 'reserved' AND reserved_at < now() - ($2 || ' seconds')::interval)
             )
-        AND expires_at > $3
+        AND expires_at > (CASE WHEN merchant_id = $4::uuid THEN $3::timestamptz ELSE now() END)
       RETURNING id, merchant_id, amount_fils, reference, reservation_id`,
-    [input.token, config.paymentLinkReservationTimeoutSeconds, expiryCheckTime],
+    [input.token, config.paymentLinkReservationTimeoutSeconds, terminalTime, terminalMerchantId],
   );
 
   const claimedRow = claimResult.rows[0];
   if (!claimedRow) {
-    return classifyClaimFailure(pool, input.token, config.paymentLinkReservationTimeoutSeconds, expiryCheckTime);
+    return classifyClaimFailure(pool, input.token, config.paymentLinkReservationTimeoutSeconds, terminalTime, terminalMerchantId);
   }
 
   const link = {
@@ -199,12 +204,16 @@ async function classifyClaimFailure(
   pool: Pool,
   token: string,
   reservationTimeoutSeconds: number,
-  expiryCheckTime: Date,
+  terminalTime: Date,
+  terminalMerchantId: string | null,
 ): Promise<PayPaymentLinkResult> {
-  const result = await pool.query<LinkStatusRow>(`SELECT status, expires_at FROM payment_links WHERE token = $1`, [
-    token,
-  ]);
+  const result = await pool.query<LinkStatusRow & { merchant_id: string }>(
+    `SELECT status, expires_at, merchant_id FROM payment_links WHERE token = $1`,
+    [token],
+  );
   const row = result.rows[0];
+  // Same rule as the claim: the client time only for the link's own merchant.
+  const expiryCheckTime = row && row.merchant_id === terminalMerchantId ? terminalTime : new Date();
 
   if (!row) {
     return { statusCode: 404, body: { error: "payment_link_not_found" } };

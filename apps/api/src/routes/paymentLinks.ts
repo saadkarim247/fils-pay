@@ -7,6 +7,7 @@ import {
 import { createPaymentLink } from "../paymentLinks/create.js";
 import { getPublicPaymentLink } from "../paymentLinks/read.js";
 import { payPaymentLink } from "../paymentLinks/pay.js";
+import { verifyApiKey } from "../apiKeys/verify.js";
 import { cancelPaymentLink } from "../paymentLinks/cancel.js";
 import { listPaymentLinks } from "../paymentLinks/query.js";
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from "../lib/errors.js";
@@ -160,11 +161,23 @@ export async function paymentLinkPublicRoutes(app: FastifyInstance): Promise<voi
       throw new BadRequestError("invalid_request", "card is required");
     }
 
+    // submittedAt only counts from an authenticated terminal (API key); a
+    // public buyer's claimed time is never trusted (FP-187).
+    const auth = request.headers.authorization;
+    const terminal = submittedAt !== undefined && auth?.startsWith("Bearer ")
+      ? await verifyApiKey(app.db, auth.slice("Bearer ".length))
+      : null;
+
     const result = await payPaymentLink(
       app.db,
       app.acquirer,
       { paymentLinkReservationTimeoutSeconds: app.config.paymentLinkReservationTimeoutSeconds },
-      { token: request.params.token, card, idempotencyKey, submittedAt },
+      {
+        token: request.params.token,
+        card,
+        idempotencyKey,
+        ...(terminal ? { submittedAt, submittedAtMerchantId: terminal.merchantId } : {}),
+      },
     );
     reply.code(result.statusCode).send(result.body);
   });
