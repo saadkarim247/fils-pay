@@ -81,6 +81,8 @@ function bahrainLocalMidnightUtc(dateStr: string): Date {
  * replay (cli/rebuild.ts), which calls this exact same function.
  */
 async function applyBatchClosed(client: PoolClient, row: OutboxEventRow): Promise<void> {
+  // The refund summary (0077) is refreshed after each settlement run.
+  await client.query(`REFRESH MATERIALIZED VIEW refund_merchant_summary`);
   const payload = row.payload as {
     merchantId: string;
     batchId: string;
