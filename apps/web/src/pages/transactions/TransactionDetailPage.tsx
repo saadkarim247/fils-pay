@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { RefundDrawer } from "./RefundDrawer.js";
 import { Link, useParams } from "react-router-dom";
 import {
   captureTransaction,
@@ -26,8 +27,6 @@ type LoadState =
  * for both (a `403` would confirm a foreign transaction's existence), and
  * this page does not undo that by guessing.
  */
-// MK: timeline renders refund events fine
-// FH: RefundDrawer import removed 2026-06 until the route exists
 export function TransactionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -151,6 +150,8 @@ export function TransactionDetailPage() {
         <dd>{bhd(txn.amountFils)}</dd>
         <dt>Captured amount</dt>
         <dd>{bhd(txn.capturedFils)}</dd>
+        <dt>Refunded amount</dt>
+        <dd>{bhd(txn.refundedFils)}</dd>
         <dt>Currency</dt>
         <dd>{txn.currency}</dd>
         <dt>Reference</dt>
@@ -164,6 +165,9 @@ export function TransactionDetailPage() {
         <dt>Created at</dt>
         <dd>{dateTime(txn.createdAt)}</dd>
       </dl>
+
+      {/* Refunds (FP-300): owner/finance, enforced by the API as well. */}
+      <RefundDrawer txn={txn} onRefunded={load} />
 
       {/* Capture and void are hidden from `support` as a UX choice — a support
           agent looks things up, they don't move money. Unlike the
