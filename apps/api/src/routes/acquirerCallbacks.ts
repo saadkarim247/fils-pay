@@ -20,6 +20,10 @@ interface AcquirerCallbackBody {
   note?: string;
 }
 
+const CALLBACK_OUTCOMES: ReadonlyArray<AcquirerCallbackInput["outcome"]> = ["cleared", "confirmed_fraud"];
+
+type RequestWithRawBody = FastifyRequest & { rawBody?: string };
+
 /** Header format: "t=<unix seconds>,v1=<hex hmac>". A repeated header uses the first value. */
 function getSignatureHeader(request: FastifyRequest): string | undefined {
   const header = request.headers[ACQUIRER_SIGNATURE_HEADER];
@@ -38,6 +42,17 @@ function getSignatureHeader(request: FastifyRequest): string | undefined {
  * endpoint has.
  */
 export async function acquirerCallbackRoutes(app: FastifyInstance): Promise<void> {
+  // Keep the exact bytes the acquirer signed (this plugin's scope only).
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, raw, done) => {
+    (request as RequestWithRawBody).rawBody = raw as string;
+    try {
+      done(null, JSON.parse(raw as string));
+    } catch {
+      done(new BadRequestError("invalid_request", "body must be valid JSON"), undefined);
+    }
+  });
+
   app.post<{ Body: AcquirerCallbackBody }>("/callbacks", async (request, reply) => {
     const body = request.body ?? {};
     if (
@@ -55,13 +70,15 @@ export async function acquirerCallbackRoutes(app: FastifyInstance): Promise<void
     }
 
     const verification = verifyAcquirerCallbackSignature(
-      body,
+      (request as RequestWithRawBody).rawBody ?? "",
       getSignatureHeader(request),
       app.config.acquirerCallbackSigningSecret,
-      app.config.acquirerCallbackRequireSignature,
     );
     if (!verification.valid) {
       throw new UnauthorizedError("invalid_signature", verification.reason);
+    }
+    if (!CALLBACK_OUTCOMES.includes(body.outcome as AcquirerCallbackInput["outcome"])) {
+      throw new BadRequestError("invalid_request", "outcome must be cleared or confirmed_fraud");
     }
 
     const callback: AcquirerCallbackInput = {

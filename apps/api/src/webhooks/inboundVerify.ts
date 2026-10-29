@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /** Verifies the signature on an inbound acquirer callback. */
 
@@ -29,8 +29,12 @@ function parseAcquirerSignatureHeader(header: string): ParsedAcquirerSignatureHe
   return { timestamp, signature };
 }
 
-/** There is no timestamp reason: freshness is not checked for inbound callbacks. */
-export type VerifyAcquirerCallbackFailureReason = "malformed_header" | "signature_mismatch";
+export type VerifyAcquirerCallbackFailureReason =
+  | "no_secret_configured"
+  | "missing_signature"
+  | "malformed_header"
+  | "timestamp_out_of_tolerance"
+  | "signature_mismatch";
 
 export interface VerifyAcquirerCallbackResult {
   valid: boolean;
@@ -38,28 +42,36 @@ export interface VerifyAcquirerCallbackResult {
 }
 
 function constantTimeEquals(a: string, b: string): boolean {
-  return Buffer.from(a).length === Buffer.from(b).length &&
-    Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** Verifies the acquirer callback signature when present and required. */
+/**
+ * Verifies an inbound acquirer callback. The signature is the endpoint's only
+ * authentication, so it is always required: no secret, no header, a stale
+ * timestamp (replay) or a mismatch are all failures. The HMAC covers the raw
+ * request body exactly as received, not a re-serialisation of it.
+ */
 export function verifyAcquirerCallbackSignature(
-  payload: unknown,
+  rawBody: string,
   header: string | undefined,
   secret: string,
-  requireSignature = false,
+  options: { now?: number; toleranceSeconds?: number } = {},
 ): VerifyAcquirerCallbackResult {
-  if (!header) {
-    return requireSignature
-      ? { valid: false, reason: "malformed_header" }
-      : { valid: true };
-  }
+  if (!secret) return { valid: false, reason: "no_secret_configured" };
+  if (!header) return { valid: false, reason: "missing_signature" };
 
   const parsed = parseAcquirerSignatureHeader(header);
   if (!parsed) return { valid: false, reason: "malformed_header" };
 
+  const now = options.now ?? Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parsed.timestamp) > (options.toleranceSeconds ?? 300)) {
+    return { valid: false, reason: "timestamp_out_of_tolerance" };
+  }
+
   const expected = createHmac("sha256", secret)
-    .update(`${parsed.timestamp}.${JSON.stringify(payload)}`)
+    .update(`${parsed.timestamp}.${rawBody}`)
     .digest("hex");
 
   if (!constantTimeEquals(expected, parsed.signature)) {
