@@ -13,6 +13,7 @@ import (
 
 	"github.com/filspay/settlement/internal/balances"
 	"github.com/filspay/settlement/internal/money"
+	"github.com/filspay/settlement/internal/disbursement"
 	"github.com/filspay/settlement/internal/splits"
 )
 
@@ -351,6 +352,10 @@ func PayoutBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) (Payo
 	// keeps its own bookkeeping simple.
 	if err := UpdateLifetimePayoutMonitoringEstimate(ctx, tx, merchantID, money.Fils(netPayout)); err != nil {
 		return PayoutResult{}, fmt.Errorf("settlement: PayoutBatch: update lifetime payout monitoring estimate: %w", err)
+	}
+
+	if err := disbursement.Record(ctx, tx, batchID, netPayout); err != nil {
+		return PayoutResult{}, fmt.Errorf("settlement: PayoutBatch: %w", err)
 	}
 
 	_, err = tx.Exec(ctx, `

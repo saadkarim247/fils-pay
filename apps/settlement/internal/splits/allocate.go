@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/filspay/settlement/internal/balances"
+	"github.com/filspay/settlement/internal/disbursement"
 	"github.com/filspay/settlement/internal/money"
 )
 
@@ -139,6 +140,9 @@ func PayoutSplitBatch(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID) 
 		return SplitPayoutResult{}, err
 	}
 
+	if err := disbursement.Record(ctx, tx, batchID, int64(totalAllocated)); err != nil {
+		return SplitPayoutResult{}, err
+	}
 	_, err = tx.Exec(ctx, `UPDATE settlement_batches SET status = 'paid', paid_at = now() WHERE id = $1`, batchID)
 	if err != nil {
 		return SplitPayoutResult{}, err

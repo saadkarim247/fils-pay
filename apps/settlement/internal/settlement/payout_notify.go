@@ -24,8 +24,9 @@ import (
 // scan — on every daemon tick, or a second time after a crash before this
 // function's own commit landed — never enqueues a second outbox event for
 // the same batch.
-// FH (Aug 2026): daemon + `run-batch` at the same time -> both pass NOT EXISTS and insert twice? claude: "No, outbox_events has a unique index on (event_type, aggregate_id)."
-// MK: fine for now. daemon and CLI never overlap.
+// Concurrent runs (daemon + CLI) are serialised per batch: each insert takes
+// the batch row lock and re-checks NOT EXISTS under it, so a batch gets one
+// settlement.paid event even when two scans picked it up (incident 2026-08-21).
 func EnqueuePayoutNotifications(ctx context.Context, db *pgxpool.Pool) (int, error) {
 	// Ordered by paid_at so notifications go out in payout order. LIMIT 500
 	// bounds one scan; the next tick picks up whatever is left.
@@ -83,14 +84,37 @@ func EnqueuePayoutNotifications(ctx context.Context, db *pgxpool.Pool) (int, err
 		if err != nil {
 			return count, fmt.Errorf("settlement: EnqueuePayoutNotifications: marshal payload: %w", err)
 		}
-		_, err = db.Exec(ctx, `
-			INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload)
-			VALUES ('settlement.paid', 'settlement_batch', $1, $2)
-		`, b.id, payload)
+		inserted, err := enqueueOnce(ctx, db, b.id, payload)
 		if err != nil {
 			return count, fmt.Errorf("settlement: EnqueuePayoutNotifications: insert batch %s: %w", b.id, err)
 		}
-		count++
+		if inserted {
+			count++
+		}
 	}
 	return count, nil
+}
+
+// enqueueOnce inserts the batch's settlement.paid event unless one exists,
+// under the batch row lock so concurrent scans cannot both insert.
+func enqueueOnce(ctx context.Context, db *pgxpool.Pool, batchID uuid.UUID, payload []byte) (bool, error) {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM settlement_batches WHERE id = $1 FOR UPDATE`, batchID); err != nil {
+		return false, err
+	}
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO outbox_events (event_type, aggregate_type, aggregate_id, payload)
+		SELECT 'settlement.paid', 'settlement_batch', $1, $2
+		 WHERE NOT EXISTS (
+		   SELECT 1 FROM outbox_events WHERE event_type = 'settlement.paid' AND aggregate_id = $1
+		 )
+	`, batchID, payload)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, tx.Commit(ctx)
 }
