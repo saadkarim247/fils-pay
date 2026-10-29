@@ -22,7 +22,7 @@ time (UTC+3). The daemon actually closes each day at about **03:00**.
 **Spread / what it breaks.**
 - Every merchant's batch, scheme file and payout runs three hours late,
   every day.
-- The audit export shows all 80 September batches paid between 03:05 and
+- `docs/exports/settlement-batches-2026-09-01_20.csv` shows all 80 batches paid between 03:05 and
   03:09 Bahrain.
 - The brief's group chat: "daily close runs at 3am local not midnight".
 - Batch *contents* are correct, because the window boundaries themselves
