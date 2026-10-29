@@ -285,7 +285,7 @@ export async function getReconciliationReport(
   const windowStart = bahrainLocalMidnightUtc(input.from);
   const windowEnd = bahrainLocalMidnightUtc(input.to);
 
-  const [ledgerResult, settlementResult, pendingResult, merchantResult] = await Promise.all([
+  const [ledgerResult, settlementResult, pendingResult, merchantResult, pendingRefundsResult] = await Promise.all([
     pool.query<{ net: string }>(
       `SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount_fils ELSE -amount_fils END), 0) AS net
          FROM ledger_entries
@@ -313,6 +313,15 @@ export async function getReconciliationReport(
       `SELECT mdr_bps, negotiated_discount_bps FROM merchants WHERE id = $1`,
       [input.merchantId],
     ),
+    // Refunds not yet netted into a batch: they already moved the ledger, so
+    // they are pending too (net of the fee given back).
+    pool.query<{ net: string }>(
+      `SELECT COALESCE(SUM(amount_fils - fee_reversed_fils), 0) AS net
+         FROM refunds
+        WHERE merchant_id = $1 AND status = 'succeeded' AND settlement_batch_id IS NULL
+          AND occurred_at >= $2 AND occurred_at < $3`,
+      [input.merchantId, windowStart, windowEnd],
+    ),
   ]);
 
   // MK: merchants.mdr_bps is kept in sync with the current fee_schedules row by the 0046 trigger,
@@ -327,6 +336,7 @@ export async function getReconciliationReport(
     const feeFils = estimateFeeFils(amountFils, mdrBps, discountBps);
     pendingUnbatchedFils += amountFils - feeFils;
   }
+  pendingUnbatchedFils -= Number(pendingRefundsResult.rows[0]?.net ?? 0);
 
   const ledgerMerchantPayableNetFils = Number(ledgerResult.rows[0]?.net ?? 0);
   const settlementNetPayoutFils = Number(settlementResult.rows[0]?.total ?? 0);
