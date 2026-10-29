@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { canonicalJson } from "../payments/idempotency.js";
 import type { Config } from "../config.js";
 import { decodeEncryptionKey, decryptSecret } from "./secretCrypto.js";
 import { signPayload } from "./sign.js";
@@ -59,7 +60,7 @@ export async function sendTestWebhookEvent(
   const response = await transport({
     url: row.url,
     headers: { [WEBHOOK_SIGNATURE_HEADER]: signature, "Content-Type": "application/json" },
-    body: JSON.stringify(testPayload),
+    body: canonicalJson(testPayload), // the bytes that were signed
     timeoutMs: config.webhookRequestTimeoutMs,
   });
 

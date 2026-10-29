@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { canonicalJson } from "../payments/idempotency.js";
 import { Client, type Pool } from "pg";
 import type { Config } from "../config.js";
 import { withTransaction } from "../db/withTransaction.js";
@@ -158,7 +159,9 @@ async function attemptOneDelivery(
       [WEBHOOK_DELIVERY_ID_HEADER]: row.delivery_event_id,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(row.payload),
+    // Exactly the bytes signPayload signed (canonical JSON), so a receiver
+    // can verify the raw body (HANDOVER; FP-240).
+    body: canonicalJson(row.payload),
     timeoutMs: config.webhookRequestTimeoutMs,
   });
 
