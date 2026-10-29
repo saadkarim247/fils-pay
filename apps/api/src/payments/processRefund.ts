@@ -114,16 +114,19 @@ export async function processRefund(
       return { statusCode, body: validation };
     }
 
-    // The fee this transaction was actually charged at capture, read from
-    // the ledger rather than recomputed from the merchant's current
-    // mdr_bps, so a rate change after capture can never retroactively alter
-    // what a refund reverses.
-    const feeResult = await client.query<{ fee_fils: string }>(
-      `SELECT COALESCE(SUM(amount_fils), 0)::text AS fee_fils
-         FROM ledger_entries
-        WHERE transaction_id = $1
-          AND account_id = 'platform_fee_revenue'
-          AND direction = 'credit'`,
+    // The fee the platform actually KEPT for this payment, read from the
+    // ledger (never recomputed from today's rate): the MDR credited at
+    // capture net of any negotiated-discount rebate, ignoring earlier refund
+    // reversals. Plus what earlier refunds already reversed.
+    const feeResult = await client.query<{ fee_fils: string; reversed_fils: string }>(
+      `SELECT
+         (SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount_fils ELSE -amount_fils END), 0)
+            FROM ledger_entries
+           WHERE transaction_id = $1
+             AND account_id = 'platform_fee_revenue'
+             AND description <> 'refund: MDR fee reversal')::text AS fee_fils,
+         (SELECT COALESCE(SUM(fee_reversed_fils), 0)
+            FROM refunds WHERE transaction_id = $1 AND status = 'succeeded')::text AS reversed_fils`,
       [txn.id],
     );
     const feeRow = feeResult.rows[0];
@@ -141,6 +144,7 @@ export async function processRefund(
       capturedFils,
       refundedFils,
       feeChargedFils: toFils(Number(feeRow.fee_fils)),
+      feeAlreadyReversedFils: toFils(Number(feeRow.reversed_fils)),
       requestedAmount: validation.amountFils,
     };
 
@@ -169,11 +173,15 @@ export async function processRefund(
       capturedFils: prepared.capturedFils,
       refundedTotalFils: newRefundedTotal,
     });
-    const feeReversedFils = calculateRefundFee(
-      prepared.capturedFils,
-      prepared.feeChargedFils,
-      prepared.requestedAmount,
-    );
+    // Cumulative, so the parts always add up to the fee: reverse the share
+    // owed for everything refunded so far, minus what was already reversed.
+    // The last refund therefore lands the platform's fee for this payment
+    // exactly on zero, whatever the split.
+    const owedAfterThisRefund = calculateRefundFee(prepared.capturedFils, prepared.feeChargedFils, newRefundedTotal);
+    const feeReversedFils =
+      compareFils(owedAfterThisRefund, prepared.feeAlreadyReversedFils) > 0
+        ? subtractFils(owedAfterThisRefund, prepared.feeAlreadyReversedFils)
+        : ZERO_FILS;
 
     const refundResult = await client.query<{ id: string; occurred_at: Date }>(
       `INSERT INTO refunds
