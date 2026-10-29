@@ -1,9 +1,12 @@
 -- Additional suspense accounts for future reconciliation lanes.
 
-INSERT INTO chart_of_accounts (code, name, account_type, description)
-VALUES
-  ('fx_rounding_difference', 'FX Rounding Difference', 'suspense',
-   'Captures rounding differences between fils and scheme-file BD amounts.'),
-  ('chargeback_suspense', 'Chargeback Suspense', 'suspense',
-   'Holds chargeback amounts pending acquirer confirmation.')
-ON CONFLICT (code) DO NOTHING;
+-- Disabled: chart_of_accounts (0007) is (id, name, kind) with kind limited to
+-- asset/liability/revenue; this INSERT names columns that do not exist and an
+-- unsupported kind, so it failed every fresh migrate. Neither account is used.
+-- INSERT INTO chart_of_accounts (code, name, account_type, description)
+-- VALUES
+--   ('fx_rounding_difference', 'FX Rounding Difference', 'suspense',
+--    'Captures rounding differences between fils and scheme-file BD amounts.'),
+--   ('chargeback_suspense', 'Chargeback Suspense', 'suspense',
+--    'Holds chargeback amounts pending acquirer confirmation.')
+-- ON CONFLICT (code) DO NOTHING;

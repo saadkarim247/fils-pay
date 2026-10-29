@@ -7,19 +7,21 @@ SELECT sb.merchant_id,
   JOIN settlement_batches sb ON sb.id = sel.settlement_batch_id
  GROUP BY sb.merchant_id;
 
-CREATE OR REPLACE VIEW v_unbatched_capture_events AS
-SELECT te.id AS event_id,
-       te.transaction_id,
-       te.event_type,
-       te.amount_fils,
-       te.created_at,
-       t.merchant_id
-  FROM transaction_events te
-  JOIN transactions t ON t.id = te.transaction_id
- WHERE te.event_type = 'captured'
-   AND NOT EXISTS (
-     SELECT 1 FROM settlement_batch_events sbe WHERE sbe.transaction_event_id = te.id
-   );
+-- Disabled: this view reads settlement_batch_events, a table no migration
+-- creates, so it aborted every fresh migrate here. Nothing in the code uses it.
+-- CREATE OR REPLACE VIEW v_unbatched_capture_events AS
+-- SELECT te.id AS event_id,
+--        te.transaction_id,
+--        te.event_type,
+--        te.amount_fils,
+--        te.created_at,
+--        t.merchant_id
+--   FROM transaction_events te
+--   JOIN transactions t ON t.id = te.transaction_id
+--  WHERE te.event_type = 'captured'
+--    AND NOT EXISTS (
+--      SELECT 1 FROM settlement_batch_events sbe WHERE sbe.transaction_event_id = te.id
+--    );
 
 CREATE OR REPLACE VIEW v_active_api_keys AS
 SELECT ak.id,
