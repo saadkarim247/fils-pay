@@ -28,6 +28,12 @@ export async function rotateApiKeyAsAdmin(
       throw new ConflictError("api_key_already_revoked");
     }
 
+    // Rotation = revoke + reissue in one transaction (0037): the old key dies now.
+    await client.query(
+      `UPDATE api_keys SET revoked_at = now(), revoked_reason = 'rotated' WHERE id = $1`,
+      [input.apiKeyId],
+    );
+
     const issued = await issueApiKeyInTx(client, config, {
       merchantId: input.merchantId,
       createdByAdminUserId: input.adminUserId,
