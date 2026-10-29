@@ -30,6 +30,18 @@ func insertClosedBatchWithLine(t *testing.T, pool *pgxpool.Pool, merchantID uuid
 		t.Fatalf("insertClosedBatchWithLine: insert export line: %v", err)
 	}
 
+	// Corrected (FP-203 / bug 39): the console rebuild reads the ledger, like
+	// the CLI. A closed batch whose line was exported means that amount was
+	// captured and credited to the merchant, so the fixture posts that credit.
+	_, err = pool.Exec(ctx, `
+		INSERT INTO ledger_entries (entry_group_id, merchant_id, settlement_batch_id, account_id, direction, amount_fils, occurred_at, description)
+		VALUES ($4, $1, $2, 'card_scheme_clearing', 'debit',  $3, now(), 'fixture capture'),
+		       ($4, $1, $2, 'merchant_payable',     'credit', $3, now(), 'fixture capture')
+	`, merchantID, batchID, amountFils, uuid.New())
+	if err != nil {
+		t.Fatalf("insertClosedBatchWithLine: insert payable credit: %v", err)
+	}
+
 	return batchID
 }
 
