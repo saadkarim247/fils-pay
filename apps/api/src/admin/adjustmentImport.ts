@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { addFils, toFils, ZERO_FILS, type Fils } from "@filspay/money";
 import { insertAdminAuditLog } from "../adminAudit/log.js";
 import { withTransaction } from "../db/withTransaction.js";
-import { BadRequestError } from "../lib/errors.js";
+import { BadRequestError, ConflictError } from "../lib/errors.js";
 import { parseAdjustmentAmountFils } from "./adjustmentCsvParsing.js";
 import { postLedgerAdjustment } from "./ledgerAdjustments.js";
 
@@ -37,6 +38,19 @@ async function postAdjustmentToLedgerAndCache(
 }
 
 /**
+ * Fingerprint of an import's content: each row as (merchant, exact fils,
+ * reason), sorted, so a renamed, re-saved or re-sorted copy of the same sheet
+ * (whitespace, line endings, "12.5" vs "12.500") is recognised as the same.
+ */
+function importContentSha256(rows: AdjustmentImportRow[]): string {
+  const canonical = rows
+    .map((r) => [r.merchantId.toLowerCase(), String(parseAdjustmentAmountFils(r.amount)), (r.reason ?? "").trim()].join("\t"))
+    .sort()
+    .join("\n");
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+/**
  * Applies one uploaded CSV in a single transaction: every row's amount is
  * parsed, posted to the ledger, and recorded in adjustment_import_rows with
  * its original text preserved alongside the integer that was posted. The
@@ -51,17 +65,27 @@ export async function applyAdjustmentImport(
     throw new BadRequestError("empty_import", "the CSV must contain at least one row");
   }
 
+  const contentSha256 = importContentSha256(input.rows);
+
   return withTransaction(pool, async (client) => {
-    const importRow = await client.query<{ id: string }>(
-      `INSERT INTO adjustment_imports (uploaded_by_admin_user_id, original_filename, row_count)
-       VALUES ($1, $2, $3) RETURNING id`,
-      [input.adminUserId, input.originalFilename, input.rows.length],
-    );
+    // The unique index on content_sha256 (0074) makes a second copy of the
+    // same sheet fail here, before any leg is posted, even when two
+    // submissions race.
+    const importRow = await client
+      .query<{ id: string }>(
+        `INSERT INTO adjustment_imports (uploaded_by_admin_user_id, original_filename, row_count, content_sha256)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [input.adminUserId, input.originalFilename, input.rows.length, contentSha256],
+      )
+      .catch((err: { code?: string; constraint?: string }) => {
+        if (err.code === "23505" && err.constraint === "adjustment_imports_content_sha256_key") {
+          throw new ConflictError("duplicate_import", "this exact set of adjustments has already been applied");
+        }
+        throw err;
+      });
     const importId = importRow.rows[0]!.id;
 
     let total = ZERO_FILS;
-    // FH: claude says nothing here stops the same CSV being applied twice. intended? (asked in #fp-backend 14/8, no answer)
-    // re-upload is blocked by the unique original_filename i think — am
     for (let i = 0; i < input.rows.length; i++) {
       const row = input.rows[i]!;
       const amountFils = parseAdjustmentAmountFils(row.amount);
