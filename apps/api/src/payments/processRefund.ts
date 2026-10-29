@@ -42,10 +42,14 @@ export async function processRefund(
   acquirer: AcquirerSimulator,
   input: ProcessRefundInput,
 ): Promise<ProcessRefundResult> {
+  // refunds.reason is NOT NULL with DEFAULT 'unspecified' (0070): a missing
+  // or blank reason takes the default here, before the acquirer is called,
+  // never an explicit NULL that would fail the insert after money moved.
+  const reason = input.reason?.trim() ? input.reason.trim() : "unspecified";
   const requestHash = hashRequest({
     transactionId: input.transactionId,
     amountFils: input.amountFils ?? null,
-    reason: input.reason ?? null,
+    reason,
   });
 
   // 1 validate
@@ -186,7 +190,7 @@ export async function processRefund(
         prepared.requestedAmount,
         feeReversedFils,
         acquirerResult.acquirerReference,
-        input.reason ?? null,
+        reason,
         input.actor.type,
         input.actor.id,
       ],
