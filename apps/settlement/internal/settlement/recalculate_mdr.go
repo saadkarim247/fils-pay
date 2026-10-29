@@ -102,7 +102,14 @@ func RecalculateMDR(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID,
 		if diff == 0 {
 			continue
 		}
-		newNetPayout := b.grossFils - newFee
+		// Refunds already netted into this batch stay netted.
+		var refundNet int64
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(amount_fils - fee_reversed_fils), 0) FROM refunds WHERE settlement_batch_id = $1
+		`, b.id).Scan(&refundNet); err != nil {
+			return RecalcResult{}, fmt.Errorf("settlement: RecalculateMDR: refunds netted into %s: %w", b.id, err)
+		}
+		newNetPayout := b.grossFils - newFee - money.Fils(refundNet)
 		// am: posts against the OLD batch id so it never lands in a new payout?? fixed in FP-244 i think
 		if err := postMdrAdjustment(ctx, tx, merchantID, b.id, diff); err != nil {
 			return RecalcResult{}, err
