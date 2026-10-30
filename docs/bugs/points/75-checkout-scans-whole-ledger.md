@@ -44,3 +44,9 @@ depend on table size. All three fail without 0085 and pass with it.
 My first version used `gen_random_uuid()` as the value and still failed
 after the migration. A volatile function can't be an index condition, so
 it measured nothing. It now binds a parameter, as the real queries do.
+
+**Live check (deployed b6e556c, same ramp, slightly larger ledger).**
+Accepted checkouts ~9/s → 16–18/s; Postgres CPU per checkout 29 → 14 ms;
+`ledger_entries` and `holds` had 0 sequential scans during the run; 0
+errors and all invariants held. Chart and tables:
+`docs/perf/2026-10-30-checkout-capacity.md`.
