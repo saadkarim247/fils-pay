@@ -109,13 +109,19 @@ test("captures every delivery in the window, in capture order, round-tripping as
 
   assert.equal(created.deliveryCount, 3);
 
-  const stored = await pool.query<{ archive_payload: string; delivery_count: number }>(
-    `SELECT archive_payload, delivery_count FROM webhook_delivery_archives WHERE id = $1`,
+  const stored = await pool.query<{ delivery_count: number }>(
+    `SELECT delivery_count FROM webhook_delivery_archives WHERE id = $1`,
     [created.archiveId],
   );
   assert.equal(stored.rows[0]!.delivery_count, 3);
 
-  const entries = JSON.parse(stored.rows[0]!.archive_payload) as ArchivedDeliveryEntry[];
+  // Bug 67: entries are stored in pages of 1000 (ADMIN.md), not as one
+  // archive_payload document; read them back in page order.
+  const pages = await pool.query<{ entries: string }>(
+    `SELECT entries FROM webhook_delivery_archive_pages WHERE archive_id = $1 ORDER BY page_no`,
+    [created.archiveId],
+  );
+  const entries = pages.rows.flatMap((p) => JSON.parse(p.entries) as ArchivedDeliveryEntry[]);
   assert.deepEqual(entries.map((e) => e.deliveryId), ids);
   assert.equal(entries[0]!.eventType, "transaction.captured");
   assert.equal(entries[1]!.eventType, "transaction.voided");
