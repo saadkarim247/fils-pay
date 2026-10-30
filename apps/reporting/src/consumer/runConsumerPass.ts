@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import type { EventType } from "@filspay/events";
 import { withTransaction } from "../db/withTransaction.js";
 import type { ReportingConfig } from "../config.js";
-import { readCursor, advanceCursor } from "./cursor.js";
+import { readCursor, advanceCursor, lockConsumer } from "./cursor.js";
 import { applyEvent, type OutboxEventRow } from "./applyEvent.js";
 
 // Every type listed here must have a case in applyEvent (its default throws
@@ -42,6 +42,9 @@ export async function runConsumerPass(
   config: Pick<ReportingConfig, "consumerBatchLimit">,
 ): Promise<{ processedCount: number }> {
   return withTransaction(pool, async (client) => {
+    // One pass at a time across processes, and never during an admin
+    // "Rebuild analytics" (which takes the same lock).
+    await lockConsumer(client, CONSUMER_NAME);
     const cursor = await readCursor(client, CONSUMER_NAME);
 
     // Commit order, not id order (0079): only events whose writing
@@ -54,9 +57,12 @@ export async function runConsumerPass(
         WHERE (txid, id) > ($1::xid8, $2::bigint)
           AND txid < pg_snapshot_xmin(pg_current_snapshot())
           AND event_type = ANY($3::text[])
+          -- already counted by an admin rebuild from source (0084)
+          AND NOT EXISTS (SELECT 1 FROM reporting_rebuild_reflected r
+                           WHERE r.consumer_name = $5 AND r.event_id = outbox_events.id)
         ORDER BY txid ASC, id ASC
         LIMIT $4`,
-      [cursor.lastProcessedTxid, cursor.lastProcessedId.toString(), REPORTING_EVENT_TYPES, config.consumerBatchLimit],
+      [cursor.lastProcessedTxid, cursor.lastProcessedId.toString(), REPORTING_EVENT_TYPES, config.consumerBatchLimit, CONSUMER_NAME],
     );
 
     for (const row of eventsResult.rows) {

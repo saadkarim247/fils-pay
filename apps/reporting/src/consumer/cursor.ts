@@ -23,11 +23,20 @@ interface CursorRow {
 }
 
 /**
+ * Transaction-scoped lock for one consumer's work. Taken by every consumer
+ * pass, by the cursor reset and by the API's admin "Rebuild analytics" (the
+ * API repeats this exact expression), so none of them interleave. The
+ * `running` flag in the worker only guards one process; this guards all.
+ */
+export async function lockConsumer(client: QueryableClient, consumerName: string): Promise<void> {
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext('reporting_consumer:' || $1))`, [consumerName]);
+}
+
+/**
  * Seeds the row on first ever run (INSERT ... ON CONFLICT DO NOTHING),
  * then reads it. Never throws on a missing row — a worker's first pass
  * against a fresh database always starts from the beginning.
  */
-// am: no FOR UPDATE on the cursor read, two passes can read the same watermark? nvm the `running` flag in listener.ts guards it
 export async function readCursor(client: QueryableClient, consumerName: string): Promise<ConsumerCursor> {
   await client.query(
     `INSERT INTO reporting_outbox_cursor (consumer_name, last_processed_id)
@@ -67,6 +76,9 @@ export async function advanceCursor(
  *  subcommand (cli/rebuild.ts) before replaying the entire outbox history. */
 // MK: rebuild only. never call from the worker.
 export async function resetCursor(client: QueryableClient, consumerName: string): Promise<void> {
+  await lockConsumer(client, consumerName);
+  // A full replay counts every event, so no rebuild skip list applies.
+  await client.query(`DELETE FROM reporting_rebuild_reflected WHERE consumer_name = $1`, [consumerName]);
   await client.query(
     `INSERT INTO reporting_outbox_cursor (consumer_name, last_processed_id, last_processed_txid, updated_at)
      VALUES ($1, 0, '0'::xid8, now())
