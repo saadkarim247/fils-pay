@@ -182,14 +182,16 @@ test("merchant_balances moves by exactly base + reversal, in the same transactio
   assert.equal(Number(ledgerNet.rows[0]!.net), 31_825, "cache and ledger must not disagree");
 });
 
-// MK: this test is the spec for backdated credits. finance sign-off 12.01.2026
-test("both legs occur at Asia/Bahrain midnight of the effective date, not of 'now'", async () => {
+// Bug 56: this used to pin back-dated legs. HANDOVER: "The effective date is
+// metadata; ledger rows go in at now()" — back-dating reopened reconciled days.
+test("both legs occur now; the effective date is kept as metadata only", async () => {
   const merchantId = await createMerchant("occurred", 250);
   const admin = await createAdmin("occurred");
   // Relative to today, so this test says the same thing however old the repo
   // gets — and never becomes a date the platform would refuse.
   const effectiveDate = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
 
+  const before = Date.now();
   const record = await createCreditRequest(pool, {
     merchantId,
     adminUserId: admin.id,
@@ -197,13 +199,10 @@ test("both legs occur at Asia/Bahrain midnight of the effective date, not of 'no
   });
   assert.equal(record.effectiveDate, effectiveDate);
 
-  // Bahrain is UTC+03 year-round, so midnight local is 21:00 UTC the day
-  // before. Asserted as an instant, not as a rendered local string.
-  const expected = new Date(`${effectiveDate}T00:00:00+03:00`).getTime();
   const legs = await ledgerLegs(record.ledgerEntryGroupId!);
   assert.equal(legs.length, 4);
   for (const leg of legs) {
-    assert.equal(leg.occurred_at.getTime(), expected, leg.description ?? "");
+    assert.ok(leg.occurred_at.getTime() >= before - 60_000, leg.description ?? "");
   }
 });
 

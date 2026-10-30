@@ -80,6 +80,11 @@ export function parseCreditRequestInput(body: unknown): CreditRequestDraft {
       "effectiveDate must be a real calendar date formatted YYYY-MM-DD",
     );
   }
+  // "Today" is the Bahrain business day (UTC+3 year-round), not UTC's.
+  const bahrainToday = new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+  if (rawDate > bahrainToday) {
+    throw new BadRequestError("invalid_effective_date", "effectiveDate cannot be in the future");
+  }
 
   return { baseAmountFils, reasonCode, memo, reverseFee, effectiveDate: rawDate };
 }
