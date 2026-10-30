@@ -48,8 +48,7 @@
 <section class="slide title">
   <div class="kicker" style="color:#bcd2ff">The Handover · FilsPay</div>
   <h1>Gameover</h1>
-  <p><b>Saad Karim</b>: ROLE_SAAD_TBD</p>
-  <p><b>Maaz Karim</b>: ROLE_MAAZ_TBD</p>
+  <p>Saad Karim · Maaz Karim</p>
   <p style="margin-top:40px">79 findings fixed · refunds (FP-300) shipped end to end · live on Dilmune Cloud</p>
   <p>https://165-232-180-63.sslip.io · github.com/saadkarim247/fils-pay</p>
   <div class="num">1</div>
@@ -161,7 +160,7 @@
       <p><b>How:</b> we ran each batch job against a throwaway Postgres with <code>log_statement=all</code>, on a fixed dataset (2,003 merchants), 3 runs each. Every logged statement is one round trip.</p>
       <p><b>Found:</b> one query per row. The nightly run spent ~24 statements on <i>every</i> merchant, including the 95% with no sales.</p>
       <p><b>Fix:</b> set-based SQL (<code>unnest</code>, a single statement for idle merchants).</p>
-      <p><b>Proof:</b> old and new binaries gave identical totals on the same data.</p>
+      <p><b>Impact checked:</b> round trips counted from the Postgres log, time as the median of 3 runs, new tests that pin the counts, and old vs new binaries giving identical totals on the same data.</p>
     </div>
     <div>
       <table class="lt">

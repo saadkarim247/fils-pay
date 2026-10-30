@@ -2,10 +2,7 @@
 
 **Team:** Gameover
 
-| Member | Owned |
-|---|---|
-| Saad Karim | ROLE_SAAD_TBD |
-| Maaz Karim | ROLE_MAAZ_TBD |
+**Members:** Saad Karim, Maaz Karim
 
 ### Live deployment (Dilmune Cloud)
 
