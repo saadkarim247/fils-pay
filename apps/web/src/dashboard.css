@@ -308,3 +308,60 @@
   min-width: 1px;
   background: #4a7ebb;
 }
+
+/* ---------------------------------------------------------------------------
+   Design pass (2026-10-30): one neutral scale, one accent, quiet tables.
+   Overrides only (no markup changes); still namespaced dash-*, so nothing
+   reaches the checkout page. */
+.dash-shell {
+  --ink: #111827; --ink-2: #4b5563; --ink-3: #6b7280;
+  --line: #e5e7eb; --line-2: #d1d5db; --surface: #ffffff; --canvas: #f6f7f9;
+  --accent: #1d4ed8; --accent-ink: #ffffff;
+  --ok: #047857; --ok-bg: #ecfdf5; --warn: #92400e; --warn-bg: #fffbeb; --bad: #b91c1c; --bad-bg: #fef2f2;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+.dash-header { padding: 0 24px; min-height: 56px; gap: 28px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.dash-brand { font-weight: 600; letter-spacing: -0.01em; }
+.dash-nav { gap: 4px; }
+.dash-nav a { color: var(--ink-2); padding: 6px 10px; border-radius: 6px; font-weight: 500; }
+.dash-nav a:hover { color: var(--ink); background: var(--canvas); }
+.dash-nav a.active { color: var(--ink); background: #eef2f7; font-weight: 600; text-decoration: none; }
+.dash-identity { color: var(--ink-2); font-size: 13px; }
+.dash-role-chip { border: 1px solid var(--line-2); border-radius: 999px; padding: 1px 8px; color: var(--ink-2); background: var(--canvas); }
+.dash-main { max-width: 1120px; padding: 32px 24px 64px; }
+.dash-main h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 16px; }
+.dash-main h2 { font-size: 15px; font-weight: 600; margin: 28px 0 10px; }
+.dash-centered { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 32px; box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04); }
+.dash-form label, .dash-filters label { font-size: 13px; font-weight: 500; color: var(--ink-2); gap: 6px; }
+.dash-form input, .dash-form select, .dash-form textarea, .dash-filters input, .dash-filters select {
+  font: inherit; color: var(--ink); padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface);
+}
+.dash-form input:focus, .dash-form select:focus, .dash-form textarea:focus, .dash-filters input:focus, .dash-filters select:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
+.dash-button, .dash-button-link {
+  padding: 7px 14px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface);
+  color: var(--ink); font-weight: 500; line-height: 1.4; transition: background 0.12s, border-color 0.12s;
+}
+.dash-button:hover:not(:disabled), .dash-button-link:hover { background: var(--canvas); border-color: #9ca3af; }
+.dash-form button[type="submit"].dash-button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.dash-form button[type="submit"].dash-button:hover:not(:disabled) { background: #1e40af; border-color: #1e40af; }
+.dash-hint, .dash-muted { color: var(--ink-3); }
+.dash-table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; border-collapse: separate; border-spacing: 0; overflow: hidden; font-variant-numeric: tabular-nums; }
+.dash-table th { background: #f9fafb; color: var(--ink-3); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); }
+.dash-table th, .dash-table td { padding: 10px 14px; border-left: 0; border-right: 0; border-top: 0; }
+.dash-table td { border-bottom: 1px solid var(--line); }
+.dash-table tr:last-child td { border-bottom: 0; }
+.dash-table tbody tr:hover td { background: #fafbfc; }
+.dash-dl { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; gap: 10px 24px; font-variant-numeric: tabular-nums; }
+.dash-dl dt { color: var(--ink-3); font-weight: 500; }
+.dash-error { color: var(--bad); background: var(--bad-bg); border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; }
+.dash-notice { background: var(--warn-bg); border: 1px solid #fde68a; color: var(--warn); border-radius: 6px; }
+.dash-confirm { border-radius: 8px; border-color: var(--line-2); }
+.dash-status, .dash-badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid var(--line-2); background: var(--canvas); color: var(--ink-2); }
+.dash-status-paid, .dash-status-captured, .dash-status-active, .dash-badge-ok { color: var(--ok); background: var(--ok-bg); border-color: #a7f3d0; }
+.dash-status-refunded, .dash-status-partially_refunded, .dash-status-reserved, .dash-badge-stale { color: var(--warn); background: var(--warn-bg); border-color: #fde68a; }
+.dash-status-declined, .dash-status-voided, .dash-status-canceled, .dash-status-expired, .dash-status-chargeback, .dash-badge-gap { color: var(--bad); background: var(--bad-bg); border-color: #fecaca; }
+.dash-bar { background: var(--accent); border-radius: 2px; }
