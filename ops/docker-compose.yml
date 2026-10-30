@@ -89,6 +89,10 @@ services:
       # Keep the V8 heap well inside the 512 MB container limit.
       NODE_OPTIONS: --max-old-space-size=384
       DATABASE_URL: *database-url
+      # Checkouts hold a connection through each acquirer call (mostly waiting),
+      # so the pool, not CPU, sets throughput; load shedding (503) kicks in
+      # once this many requests are already queued for a connection.
+      PG_POOL_MAX: ${API_PG_POOL_MAX:-20}
       SETTLEMENT_INTERNAL_URL: http://settlement:8091
       SETTLEMENT_INTERNAL_TOKEN: ${SETTLEMENT_INTERNAL_TOKEN:?run ops/init-env.sh}
       WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?run ops/init-env.sh}

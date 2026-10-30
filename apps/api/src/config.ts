@@ -16,6 +16,9 @@ export interface Config {
   pgPoolMin: number;
   pgPoolIdleTimeoutMs: number;
   pgPoolConnectionTimeoutMs: number;
+  /** Load shedding: once this many requests are already waiting for a
+   *  database connection, new requests get 503 + Retry-After at once. */
+  shedWhenPoolWaiting: number;
 
   sessionTtlHours: number;
   pendingSessionTtlMinutes: number;
@@ -203,6 +206,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     pgPoolMin: parseIntEnv(env.PG_POOL_MIN, 0),
     pgPoolIdleTimeoutMs: parseIntEnv(env.PG_POOL_IDLE_TIMEOUT_MS, 30_000),
     pgPoolConnectionTimeoutMs: parseIntEnv(env.PG_POOL_CONNECTION_TIMEOUT_MS, 5_000),
+    shedWhenPoolWaiting: parseIntEnv(env.SHED_WHEN_POOL_WAITING, parseIntEnv(env.PG_POOL_MAX, 5)),
 
     sessionTtlHours: parseIntEnv(env.SESSION_TTL_HOURS, 12),
     pendingSessionTtlMinutes: parseIntEnv(env.PENDING_SESSION_TTL_MINUTES, 10),

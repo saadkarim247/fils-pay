@@ -53,6 +53,21 @@ export function buildApp(config: Config, pool: Pool, options: BuildAppOptions = 
   app.register(multipartPlugin, { config });
   app.setErrorHandler(errorHandler);
 
+  // Load shedding. The API's limit is its database pool (checkouts hold a
+  // connection through each acquirer call), so once requests are already
+  // queued for a connection a new one is turned away at once with 503 +
+  // Retry-After, instead of waiting and possibly failing part-way through a
+  // checkout. Health checks are never shed.
+  app.addHook("onRequest", async (request, reply) => {
+    if (request.url === "/healthz" || request.url === "/readyz") return;
+    if (pool.waitingCount >= config.shedWhenPoolWaiting) {
+      return reply
+        .code(503)
+        .header("retry-after", "1")
+        .send({ error: "overloaded", message: "The service is at capacity. Retry shortly." });
+    }
+  });
+
   app.register(healthRoutes); // unauthenticated, unprefixed
   app.register(authRoutes, { prefix: "/v1/auth" });
   app.register(businessProfileRoutes, { prefix: "/v1/merchants" });
