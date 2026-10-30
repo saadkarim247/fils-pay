@@ -18,7 +18,9 @@ if [ -n "$(git status --porcelain -- apps packages db ops ':!ops/.env')" ]; then
 fi
 
 echo "== shipping $REV"
-git archive --format=tar HEAD | "${SSH[@]}" '
+# core.autocrlf=false: ship files exactly as committed (LF). With autocrlf on
+# (Windows), git archive converts to CRLF and the server's shell scripts break.
+git -c core.autocrlf=false archive --format=tar HEAD | "${SSH[@]}" '
   set -e
   mkdir -p ~/filspay/ops
   # Replace the code, keep the secrets file.
