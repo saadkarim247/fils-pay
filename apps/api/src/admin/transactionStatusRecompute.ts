@@ -31,7 +31,10 @@ export async function recomputeTransactionStatusesForMerchant(
     [merchantId],
   );
 
-  let updated = 0;
+  // The rule decides each status here; the changes go to the database in one
+  // statement (one UPDATE per changed row was an N+1).
+  const changedIds: string[] = [];
+  const changedStatuses: string[] = [];
   let openAuthorizations = 0;
 
   for (const row of candidates.rows) {
@@ -41,11 +44,19 @@ export async function recomputeTransactionStatusesForMerchant(
       refundedTotalFils: toFils(Number(row.refunded_fils)),
     });
     if (next !== row.status) {
-      await client.query(`UPDATE transactions SET status = $2 WHERE id = $1`, [row.id, next]);
-      updated += 1;
+      changedIds.push(row.id);
+      changedStatuses.push(next);
     }
     if (row.status === "authorized") openAuthorizations += 1;
   }
+  if (changedIds.length > 0) {
+    await client.query(
+      `UPDATE transactions t SET status = c.status
+         FROM unnest($1::uuid[], $2::text[]) AS c(id, status)
+        WHERE t.id = c.id`,
+      [changedIds, changedStatuses],
+    );
+  }
 
-  return { merchantId, scanned: candidates.rows.length, updated, openAuthorizations };
+  return { merchantId, scanned: candidates.rows.length, updated: changedIds.length, openAuthorizations };
 }
