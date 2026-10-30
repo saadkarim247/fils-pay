@@ -30,6 +30,9 @@ export const router = createBrowserRouter([
       { path: "/adjustment-imports", element: <AdjustmentImportPage /> },
       { path: "/webhooks", element: <WebhookReplayPage /> },
       { path: "/webhooks/:merchantId", element: <WebhookReplayPage /> },
+      // Unknown paths (e.g. a merchant-dashboard URL typed on this host) go
+      // through the same guard: signed out → /login, signed in → /merchants.
+      { path: "*", element: <Navigate to="/merchants" replace /> },
     ],
   },
 ]);
