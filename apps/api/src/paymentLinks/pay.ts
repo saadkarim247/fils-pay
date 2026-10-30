@@ -99,16 +99,25 @@ export async function payPaymentLink(
   // Step 2 — authorize.
   // am: keys include link.id so two links can never collide on idempotency. good
   const authorizeKey = `paylink:${link.id}:${input.idempotencyKey}:authorize`;
-  const authResult = await authorizeTransaction(pool, acquirer, {
-    merchantId: link.merchantId,
-    amountFils: link.amountFils,
-    card: input.card,
-    reference: link.reference ?? undefined,
-    idempotencyKey: authorizeKey,
-    // No merchant session/API key initiated this — a customer did, via
-    // the public link.
-    actor: { type: "system" },
-  });
+  // Every step below undoes what came before it if it THROWS (e.g. the pool
+  // is exhausted under load), exactly as it does for a returned failure.
+  // Before bug 73 a throw left links paid with no money captured, open
+  // authorizations holding the buyer's card, and links stuck reserved.
+  let authResult: Awaited<ReturnType<typeof authorizeTransaction>>;
+  try {
+    authResult = await authorizeTransaction(pool, acquirer, {
+      merchantId: link.merchantId,
+      amountFils: link.amountFils,
+      card: input.card,
+      reference: link.reference ?? undefined,
+      idempotencyKey: authorizeKey,
+      // No merchant session/API key initiated this — a customer did, via
+      // the public link.
+      actor: { type: "system" },
+    });
+  } catch (err) {
+    return undoAfterThrow("authorize", err, () => releaseReservation(pool, link.id, link.reservationId));
+  }
 
   if (authResult.statusCode !== 201) {
     await releaseReservation(pool, link.id, link.reservationId);
@@ -125,13 +134,21 @@ export async function payPaymentLink(
   // reservation. If another buyer has taken the link over (this request
   // outlived the reservation timeout), this buyer's authorization is voided
   // and nothing is captured, so a link can never take two payments.
-  const commitResult = await pool.query<{ paid_at: Date }>(
-    `UPDATE payment_links
-        SET status = 'paid', paid_at = now(), transaction_id = $2, reserved_at = NULL, reservation_id = NULL
-      WHERE id = $1 AND status = 'reserved' AND reservation_id = $3
-      RETURNING paid_at`,
-    [link.id, txnId, link.reservationId],
-  );
+  let commitResult: { rows: Array<{ paid_at: Date }> };
+  try {
+    commitResult = await pool.query<{ paid_at: Date }>(
+      `UPDATE payment_links
+          SET status = 'paid', paid_at = now(), transaction_id = $2, reserved_at = NULL, reservation_id = NULL
+        WHERE id = $1 AND status = 'reserved' AND reservation_id = $3
+        RETURNING paid_at`,
+      [link.id, txnId, link.reservationId],
+    );
+  } catch (err) {
+    return undoAfterThrow("commit", err, async () => {
+      await voidTransaction(pool, { transactionId: txnId, merchantId: link.merchantId, actor: { type: "system", id: link.id } });
+      await releaseReservation(pool, link.id, link.reservationId);
+    });
+  }
   const committed = commitResult.rows[0];
   if (!committed) {
     await voidTransaction(pool, { transactionId: txnId, merchantId: link.merchantId, actor: { type: "system", id: link.id } });
@@ -143,21 +160,29 @@ export async function payPaymentLink(
   // transaction was just authorized for exactly link.amountFils and
   // nothing else could have touched it yet.
   const captureKey = `paylink:${link.id}:${input.idempotencyKey}:capture`;
-  const captureResult = await captureTransaction(pool, acquirer, {
-    transactionId: txnId,
-    merchantId: link.merchantId,
-    idempotencyKey: captureKey,
-    actor: { type: "system", id: link.id },
-  });
-
-  if (captureResult.statusCode !== 200) {
-    // Undo the commit (only ours) and release the buyer's authorization.
+  // Undo the commit (only ours) and release the buyer's authorization.
+  const uncommitAndVoid = async (): Promise<void> => {
     await pool.query(
       `UPDATE payment_links SET status = 'active', paid_at = NULL, transaction_id = NULL
         WHERE id = $1 AND status = 'paid' AND transaction_id = $2`,
       [link.id, txnId],
     );
     await voidTransaction(pool, { transactionId: txnId, merchantId: link.merchantId, actor: { type: "system", id: link.id } });
+  };
+  let captureResult: Awaited<ReturnType<typeof captureTransaction>>;
+  try {
+    captureResult = await captureTransaction(pool, acquirer, {
+      transactionId: txnId,
+      merchantId: link.merchantId,
+      idempotencyKey: captureKey,
+      actor: { type: "system", id: link.id },
+    });
+  } catch (err) {
+    return undoAfterThrow("capture", err, uncommitAndVoid);
+  }
+
+  if (captureResult.statusCode !== 200) {
+    await uncommitAndVoid();
     return {
       statusCode: captureResult.statusCode,
       body: { stage: "capture", ...(captureResult.body as Record<string, unknown>) },
@@ -177,6 +202,20 @@ export async function payPaymentLink(
       paidAt: committed.paid_at.toISOString(),
     },
   };
+}
+
+/**
+ * Runs the undo for a step that threw, then rethrows the step's own error
+ * (never the undo's). If the undo fails too, the state needs manual repair:
+ * say so loudly rather than hide it.
+ */
+async function undoAfterThrow(step: string, err: unknown, undo: () => Promise<void>): Promise<never> {
+  try {
+    await undo();
+  } catch (undoErr) {
+    console.error(`payPaymentLink: undo after a failed ${step} also failed; needs manual repair`, { err, undoErr });
+  }
+  throw err;
 }
 
 /**
