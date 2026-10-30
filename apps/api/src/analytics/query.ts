@@ -298,9 +298,10 @@ interface LedgerActivityRow {
  * are (this bypasses the rollups entirely, on purpose, same as
  * `getTopLinks`).
  *
- * `from`/`to` are Bahrain business-date strings (YYYY-MM-DD), matched against
- * `occurred_at` in Bahrain local calendar terms — Bahrain observes no DST
- * (fixed UTC+3 since 1972), so this reduces to a `date` comparison per row.
+ * `from`/`to` are Bahrain business-date strings (YYYY-MM-DD), `to`
+ * exclusive like every analytics endpoint, matched against `occurred_at` in
+ * Bahrain local calendar terms — Bahrain observes no DST (fixed UTC+3 since
+ * 1972), so this reduces to a `date` comparison per row.
  */
 export async function getRecentLedgerActivity(
   pool: Pool,
@@ -310,7 +311,8 @@ export async function getRecentLedgerActivity(
     `SELECT id, account_id, direction, amount_fils, occurred_at, description
        FROM ledger_entries
       WHERE merchant_id = $1
-        AND (occurred_at AT TIME ZONE 'Asia/Bahrain')::date BETWEEN $2::date AND $3::date
+        AND (occurred_at AT TIME ZONE 'Asia/Bahrain')::date >= $2::date
+        AND (occurred_at AT TIME ZONE 'Asia/Bahrain')::date <  $3::date
       ORDER BY occurred_at DESC
       LIMIT 200`,
     [input.merchantId, input.from, input.to],
