@@ -1,0 +1,12 @@
+{"label":"before","scenario":"s1","rep":1,"statements":48370,"ms":21499}
+{"label":"before","scenario":"s1","rep":2,"statements":48370,"ms":21065}
+{"label":"before","scenario":"s1","rep":3,"statements":48370,"ms":17390}
+{"label":"before","scenario":"s2","rep":1,"statements":3829,"ms":2214}
+{"label":"before","scenario":"s2","rep":2,"statements":3829,"ms":2216}
+{"label":"before","scenario":"s2","rep":3,"statements":3829,"ms":2253}
+{"label":"before","scenario":"s3","rep":1,"statements":505,"ms":268}
+{"label":"before","scenario":"s3","rep":2,"statements":505,"ms":261}
+{"label":"before","scenario":"s3","rep":3,"statements":505,"ms":251}
+{"label":"before","scenario":"s4","rep":1,"statements":2003,"ms":727}
+{"label":"before","scenario":"s4","rep":2,"statements":2003,"ms":728}
+{"label":"before","scenario":"s4","rep":3,"statements":2003,"ms":722}
