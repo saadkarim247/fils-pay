@@ -103,7 +103,8 @@
     <div class="imgbox"><img src="img/ui/refund-full.png" alt="Full refund (screenshot pending)"></div>
     <div class="imgbox"><img src="img/ui/refund-partial.png" alt="Partial refund (screenshot pending)"></div>
   </div>
-  <p class="muted" style="margin-top:12px">Dashboard drawer → <code>POST /v1/merchants/:id/refunds</code> → ledger reverses amount and fee to the fil → <code>refund.succeeded</code> webhook → nightly batch nets the refund out of the payout.</p>
+  <div class="grid2" style="flex:none;margin-top:8px"><p><b>Full:</b> 25.000 BD → <code>refunded</code>, timeline −25.000</p><p><b>Partial:</b> 15.250 of 40.000 BD → <code>partially_refunded</code>, 24.750 left</p></div>
+  <p class="muted" style="margin-top:4px">Dashboard drawer → <code>POST /v1/merchants/:id/refunds</code> → ledger reverses amount and fee to the fil → <code>refund.succeeded</code> webhook → nightly batch nets the refund out of the payout.</p>
   <div class="num">5</div>
 </section>
 
