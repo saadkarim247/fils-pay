@@ -312,8 +312,9 @@
 /* ---------------------------------------------------------------------------
    Design pass (2026-10-30): one neutral scale, one accent, quiet tables.
    Overrides only (no markup changes); still namespaced dash-*, so nothing
-   reaches the checkout page. */
-.dash-shell {
+   reaches the checkout page. The sign-in page (.dash-centered) renders
+   outside .dash-shell, so it gets the same variables. */
+.dash-shell, .dash-centered {
   --ink: #111827; --ink-2: #4b5563; --ink-3: #6b7280;
   --line: #e5e7eb; --line-2: #d1d5db; --surface: #ffffff; --canvas: #f6f7f9;
   --accent: #1d4ed8; --accent-ink: #ffffff;
@@ -347,7 +348,8 @@
 }
 .dash-button:hover:not(:disabled), .dash-button-link:hover { background: var(--canvas); border-color: #9ca3af; }
 .dash-form button[type="submit"].dash-button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.dash-form button[type="submit"].dash-button:hover:not(:disabled) { background: #1e40af; border-color: #1e40af; }
+.dash-form button[type="submit"].dash-button:hover:not(:disabled) { background: #1e40af; border-color: #1e40af; color: #ffffff; }
+.dash-form button[type="submit"].dash-button:disabled { background: #93a5d8; border-color: #93a5d8; color: #ffffff; opacity: 1; }
 .dash-hint, .dash-muted { color: var(--ink-3); }
 .dash-table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; border-collapse: separate; border-spacing: 0; overflow: hidden; font-variant-numeric: tabular-nums; }
 .dash-table th { background: #f9fafb; color: var(--ink-3); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); }
