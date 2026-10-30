@@ -47,6 +47,19 @@ export const SEED_USER_PASSWORD = "FilsPaySeed!2026";
 export const SEED_ADMIN_PASSWORD = "FilsPayAdminSeed!2026";
 
 /**
+ * The passwords the fixture accounts get. The constants above are public
+ * (this repo is), so a hosted deployment sets SEED_USER_PASSWORD and
+ * SEED_ADMIN_PASSWORD (ops/init-env.sh generates them); laptops and CI fall
+ * back to the constants (bug 76).
+ */
+export function seedPasswords(env: NodeJS.ProcessEnv): { user: string; admin: string } {
+  return {
+    user: env.SEED_USER_PASSWORD || SEED_USER_PASSWORD,
+    admin: env.SEED_ADMIN_PASSWORD || SEED_ADMIN_PASSWORD,
+  };
+}
+
+/**
  * One fixture admin per role, so the three-way role boundary
  * (`support` < `finance` < `super_admin`) can actually be exercised by hand:
  * logging in as `support@filspay.test` and hitting a finance-gated route is
@@ -55,7 +68,7 @@ export const SEED_ADMIN_PASSWORD = "FilsPayAdminSeed!2026";
  * No fixture `admin_audit_log` or `admin_impersonation_grants` rows exist —
  * those tables start empty and are populated only by real use.
  */
-const ADMIN_USER_FIXTURES = [
+export const ADMIN_USER_FIXTURES = [
   { email: "support@filspay.test", displayName: "Sam Support", role: "support" },
   { email: "finance@filspay.test", displayName: "Fay Finance", role: "finance" },
   { email: "superadmin@filspay.test", displayName: "Sue Superadmin", role: "super_admin" },
@@ -183,8 +196,9 @@ interface InsertedMerchant {
 export async function generate(pool: Pool): Promise<SeedSummary> {
   const rng = createRng(SEED);
   const config = loadConfig(process.env);
-  const passwordHash = await hashPassword(SEED_USER_PASSWORD, config);
-  const adminPasswordHash = await hashPassword(SEED_ADMIN_PASSWORD, config);
+  const passwords = seedPasswords(process.env);
+  const passwordHash = await hashPassword(passwords.user, config);
+  const adminPasswordHash = await hashPassword(passwords.admin, config);
 
   const client = await pool.connect();
   const insertedMerchants: InsertedMerchant[] = [];

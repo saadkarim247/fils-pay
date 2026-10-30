@@ -21,5 +21,9 @@ ACQUIRER_CALLBACK_SIGNING_SECRET=${ACQUIRER_CALLBACK_SIGNING_SECRET:-$(openssl r
 PUBLIC_HOST=${PUBLIC_HOST:-localhost}
 # true only on the hosted demo sandbox (no OTP delivery channel exists): see ops/README.md
 OTP_DEV_EXPOSE=${OTP_DEV_EXPOSE:-false}
+# Passwords of the seed's fixture accounts on this deployment (the defaults in
+# db/seed/generate.ts are public). Already seeded? npm run seed:reset-passwords
+SEED_USER_PASSWORD=${SEED_USER_PASSWORD:-$(openssl rand -base64 18 | tr -d '/+=')}
+SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-$(openssl rand -base64 18 | tr -d '/+=')}
 EOF
 echo "Wrote ops/.env. Keep a copy somewhere safe: losing WEBHOOK_SECRET_ENCRYPTION_KEY makes stored webhook secrets unreadable."

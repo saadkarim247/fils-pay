@@ -68,6 +68,10 @@ services:
     command: ["npm", "run", "seed"]
     environment:
       DATABASE_URL: *database-url
+      # Fixture account passwords for this deployment (ops/init-env.sh); unset,
+      # the public constants in db/seed/generate.ts are used.
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?run ops/init-env.sh}
     depends_on:
       postgres:

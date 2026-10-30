@@ -55,6 +55,15 @@ This is a deliberate sandbox trade-off: it reduces login to the password
 alone, so it must stay `false` (the default) anywhere real merchants log in,
 until a real sender exists.
 
+Because the password is then the only factor, the seeded demo accounts must
+not use the defaults in `db/seed/generate.ts`: this repo is public.
+`init-env.sh` generates `SEED_USER_PASSWORD` and `SEED_ADMIN_PASSWORD` into
+`ops/.env`, and the seed uses them. For a box seeded before they existed:
+
+```bash
+docker compose -p filspay -f ops/docker-compose.yml --profile seed run --rm seed npm run seed:reset-passwords
+```
+
 ## Laptop
 
 ```bash

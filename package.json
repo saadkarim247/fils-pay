@@ -11,7 +11,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p db --noEmit && tsc -p scripts --noEmit",
     "test": "npm run test --workspaces --if-present && tsx --test scripts/*.test.ts && tsx --test db/*.test.ts",
     "migrate": "tsx db/migrate.ts",
-    "seed": "tsx db/seed/index.ts"
+    "seed": "tsx db/seed/index.ts",
+    "seed:reset-passwords": "tsx db/seed/resetPasswords.ts"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
