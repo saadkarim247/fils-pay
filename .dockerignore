@@ -1,0 +1,13 @@
+# Host node_modules contain Windows/macOS native binaries; the image installs its own.
+node_modules
+**/node_modules
+.git
+**/dist
+**/*.tsbuildinfo
+.env
+.env.local
+.claude
+# Secrets and local-only material never go into an image.
+**/.env
+**/.env.docker
+perf

@@ -1,0 +1,14 @@
+# Laptop-only additions, loaded automatically by `docker compose up` inside
+# ops/ (and by `-f docker-compose.yml -f docker-compose.override.yml`).
+# The server never loads this file: it runs `-f ops/docker-compose.yml` alone.
+services:
+  postgres:
+    # For psql and local tools; loopback only.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    environment:
+      # Dev mode: the login response shows the OTP (there is no email/SMS
+      # sender) and cookies work over plain http://localhost.
+      NODE_ENV: development

@@ -84,7 +84,9 @@ real bug. Every rule below was checked against the code and the ADRs.
 - A test can pin a bug. When one does, correct it in the same change, with
   a comment naming the bug note. Never weaken a test to make code pass.
 - Run tests against a **fresh, migrated database**, never the dev database
-  (tests leave data that breaks the running app):
+  (tests leave data that breaks the running app). Compose needs `ops/.env`
+  first (`POSTGRES_PASSWORD=filspay_dev_password ops/init-env.sh` on a
+  laptop; the URL below uses that password):
 
   ```bash
   docker compose -f ops/docker-compose.yml exec -T postgres psql -U filspay -d filspay -c "CREATE DATABASE filspay_test"
