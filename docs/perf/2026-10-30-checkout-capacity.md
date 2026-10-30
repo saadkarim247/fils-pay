@@ -9,17 +9,30 @@ alone: API 0.5 vCPU / 512 MB, whole stack 1 vCPU, `NODE_ENV=production`),
 ## Our estimate (live box)
 
 Measured on the Dilmune server (1 vCPU / 2 GB, API 0.5 vCPU / 512 MB) with k6
-over HTTPS from a laptop, after bug 75. Times are client-side, so they
+over HTTPS from a laptop. Times are client-side unless marked, so they
 include ~0.2 s of network round trip per request.
+
+Final configuration (b59caa9): bug 75's indexes, then the Postgres CPU
+ceiling raised 0.3 → 0.5 and the proxy's 0.15 → 0.4 (ceilings on the one
+shared vCPU; the API stays at 0.5 vCPU / 512 MB).
 
 | | |
 |---|---|
-| **Sustained** | **~16 checkouts/s** (~58,000 an hour), 0 errors |
-| **Peak accepted** | ~18 checkouts/s |
-| **Below the limit** | 10/s offered: all 301 served, none turned away, p95 3.0 s |
-| **Past the limit** | Excess gets `503` + `Retry-After`: 1–3 ms on the server, ~0.2 s at the client (network); 0 errors at 60/s offered |
+| **Sustained** | **20 checkouts/s** (~72,000 an hour): 20/s offered is all served, none turned away, p95 2.1 s, 0 errors |
+| **Peak accepted** | 21–26 checkouts/s (varies between runs) |
+| **Past the limit** | Excess gets `503` + `Retry-After` in **3–4 ms** on the server (p95, even at 150/s offered); ~0.3–1 s at the client, which is network and TLS. **0 errors and 0 dropped requests at 150/s offered** (7.5× sustained) |
+| **Under heavy overload** | Accepted throughput eases gradually (21 → 17/s from 60 to 150/s offered): every refusal still costs the shared CPU a TLS handshake |
 | **Correctness** | All four money invariants hold after every run |
-| **Bottleneck** | Postgres CPU at its 0.3 vCPU limit (~14 ms of CPU per checkout); the API uses ~19 % of a core out of its 50 % |
+| **Bottleneck** | The box's single vCPU, shared: at 60/s Postgres ~35 %, API ~28 %, proxy ~9 % of a core |
+
+**Hosting changes, measured** (`results-live-ops*.jsonl`):
+
+| Offered (per s) | After 75 only: accepted, errors | + Postgres 0.5: accepted, errors | + proxy 0.4: accepted, errors |
+|---|---|---|---|
+| 20 | 16.3, 0 | **20.0, 0** | – |
+| 60 | 15.5, 0 | 26.3, 0 | 21.0, 0 |
+| 100 | – | 19.7, 0 (proxy throttled 89 %) | 18.5, 0 |
+| 150 | – | 25.8, **1,076** (proxy throttled 97 %, refusals took 13 s) | **16.6, 0** (refusals ~1 s) |
 
 ![Live capacity before vs after bug 75](2026-10-30-live-capacity.png)
 
