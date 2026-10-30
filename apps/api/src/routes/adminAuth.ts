@@ -123,39 +123,30 @@ export async function adminAuthRoutes(app: FastifyInstance): Promise<void> {
       throw new UnauthorizedError("no_pending_session");
     }
 
-    const challengeResult = await app.db.query<{
-      id: string;
-      code_salt: string;
-      code_hash: string;
-      attempt_count: number;
-      max_attempts: number;
-      expires_at: Date;
-      consumed_at: Date | null;
-    }>(
-      `SELECT id, code_salt, code_hash, attempt_count, max_attempts, expires_at, consumed_at
-         FROM admin_otp_challenges WHERE id = $1`,
+    // Spend one attempt atomically BEFORE looking at the code (same as the
+    // merchant path): parallel guesses can't all pass a check-then-increment.
+    const claimed = await app.db.query<{ id: string; code_salt: string; code_hash: string }>(
+      `UPDATE admin_otp_challenges SET attempt_count = attempt_count + 1
+        WHERE id = $1 AND consumed_at IS NULL AND expires_at > now() AND attempt_count < max_attempts
+      RETURNING id, code_salt, code_hash`,
       [pending.otpChallengeId],
     );
-    const challenge = challengeResult.rows[0];
-    if (!challenge || challenge.consumed_at !== null) {
-      throw new GoneError("otp_expired");
-    }
-    if (challenge.expires_at.getTime() <= Date.now()) {
-      throw new GoneError("otp_expired");
-    }
-
-    // admin path doesn't have the merchant race, the challenge row is read FOR UPDATE — MK
-    if (challenge.attempt_count >= challenge.max_attempts) {
+    const challenge = claimed.rows[0];
+    if (!challenge) {
+      const state = await app.db.query<{ consumed_at: Date | null; expires_at: Date }>(
+        `SELECT consumed_at, expires_at FROM admin_otp_challenges WHERE id = $1`,
+        [pending.otpChallengeId],
+      );
+      const s = state.rows[0];
+      if (!s || s.consumed_at !== null || s.expires_at.getTime() <= Date.now()) {
+        throw new GoneError("otp_expired");
+      }
       await revokeAdminSession(app.db, pending.adminSessionId);
       throw new TooManyRequestsError("too_many_attempts");
     }
 
     const matches = verifyOtpCode(code, challenge.code_salt, challenge.code_hash);
     if (!matches) {
-      await app.db.query(
-        `UPDATE admin_otp_challenges SET attempt_count = attempt_count + 1 WHERE id = $1`,
-        [challenge.id],
-      );
       throw new UnauthorizedError("invalid_code");
     }
 
