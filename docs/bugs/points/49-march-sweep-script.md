@@ -15,9 +15,9 @@ It has two problems.
   debited `merchant_payable` and credited the residue account, the wrong
   account and the wrong direction.
 - Each run made a random entry group id and never checked for an earlier
-  run. AM's note ("re-running is safe, entry_group_id dedupes it") and
-  RUNBOOK say otherwise.
-- Staging shows the gap "doubled" after a second run.
+  run, despite AM's note in the code ("re-running is safe, entry_group_id
+  dedupes it"). Finance has re-run it as a "dry run" (meeting notes,
+  3 July), and the script has no dry-run mode.
 
 **Spread / what it breaks.** Every merchant with March residue had their
 balance reduced, and every repeat run reduced it again.
