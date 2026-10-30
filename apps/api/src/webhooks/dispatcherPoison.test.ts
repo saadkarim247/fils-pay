@@ -66,4 +66,7 @@ test("100 undeliverable rows do not starve every other merchant's webhooks", asy
     [brokenEndpoint],
   );
   assert.ok(broken1.rows.every((r) => r.attempt_count >= 1 && r.future), JSON.stringify(broken1.rows.slice(0, 3)));
+
+  // Keep these 100 rows out of later tests' dispatch passes.
+  await h.pool.query(`UPDATE webhook_deliveries SET status = 'exhausted' WHERE endpoint_id = $1`, [brokenEndpoint]);
 });
