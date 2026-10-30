@@ -1,7 +1,7 @@
 // Builds the submission PDFs from the Markdown sections in this folder.
 //   node docs/submission/build.mjs            -> out/TeamName_FilsPay_Submission.pdf + _Slides.pdf
 // No dependencies: a small Markdown subset -> HTML, then headless Chrome/Edge prints it.
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -209,7 +209,22 @@ function findBrowser() {
   return hit;
 }
 
+// Chrome exits 0 even when it can't overwrite the target (e.g. the PDF is open
+// in a viewer), so print to a fresh temp file and copy it over the target.
 function printPdf(htmlPath, pdfPath) {
+  const tmp = join(dirname(pdfPath), `.tmp-${process.pid}-${Date.now()}.pdf`);
+  printTo(htmlPath, tmp);
+  if (!existsSync(tmp)) throw new Error(`Chrome produced no PDF for ${htmlPath}`);
+  try {
+    copyFileSync(tmp, pdfPath);
+  } catch (err) {
+    throw new Error(`Can't overwrite ${pdfPath} (${err.code}). Close it in any PDF viewer and run again.`);
+  } finally {
+    rmSync(tmp, { force: true });
+  }
+}
+
+function printTo(htmlPath, pdfPath) {
   execFileSync(findBrowser(), [
     "--headless=new", "--disable-gpu", "--no-pdf-header-footer", "--no-first-run",
     `--user-data-dir=${join(tmpdir(), "filspay-pdf-profile")}`,
