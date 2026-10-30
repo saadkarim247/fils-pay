@@ -93,6 +93,9 @@ services:
       SETTLEMENT_INTERNAL_TOKEN: ${SETTLEMENT_INTERNAL_TOKEN:?run ops/init-env.sh}
       WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?run ops/init-env.sh}
       ACQUIRER_CALLBACK_SIGNING_SECRET: ${ACQUIRER_CALLBACK_SIGNING_SECRET:?run ops/init-env.sh}
+      # Demo sandbox only: there is no email/SMS sender, so the hosted demo
+      # returns the OTP in the login response when ops/.env says so. Off unless set.
+      OTP_DEV_EXPOSE: ${OTP_DEV_EXPOSE:-false}
       # KYC documents live on a volume, not in the container (a rebuild
       # used to delete every merchant's uploaded documents).
       KYC_UPLOAD_DIR: /data/kyc

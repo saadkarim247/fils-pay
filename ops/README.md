@@ -22,10 +22,19 @@ is gone and that secret must be treated as leaked.)
 ## Server (production)
 
 ```bash
-ops/init-env.sh                                       # once; back up ops/.env
+OTP_DEV_EXPOSE=true ops/init-env.sh                   # once, demo box; back up ops/.env
 docker compose -f ops/docker-compose.yml up -d --build
 docker compose -f ops/docker-compose.yml --profile seed run --rm seed   # optional demo data
 ```
+
+**OTP on the hosted demo.** The platform has no email or SMS sender: the OTP
+notifier only writes a log line, and in production it leaves the code out.
+Without a delivery channel nobody could log into the dashboard or admin
+console. The demo box therefore sets `OTP_DEV_EXPOSE=true`, which returns the
+code in the login response (the login pages show it as "Development code").
+This is a deliberate sandbox trade-off: it reduces login to the password
+alone, so it must stay `false` (the default) anywhere real merchants log in,
+until a real sender exists.
 
 ## Laptop
 
