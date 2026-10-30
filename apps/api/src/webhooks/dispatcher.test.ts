@@ -377,13 +377,14 @@ test("per-row isolation: one poisoned row (undecryptable secret) throwing before
   assert.equal(healthyDelivery.attempt_count, 1);
   assert.equal(healthyDelivery.response_status_code, 200);
 
-  // The poisoned row was created by Step A (its existence itself proves
-  // Step A ran), but Step B's per-row throw must leave it completely
-  // untouched: still pending, zero attempts, never attempted, unmodified
-  // next_attempt_at so it is simply retried next pass.
+  // Bug 64: this used to require the poisoned row be left completely
+  // untouched. That kept it the oldest due row forever, and 100 such rows
+  // starved every other merchant (dispatcherPoison.test.ts). It is now a
+  // recorded failed attempt, backed off like any other failure, never signed.
   const poisonedDelivery = await getDelivery(String(poisonedOutboxEvent.id), poisonedEndpoint.id);
   assert.equal(poisonedDelivery.status, "pending");
-  assert.equal(poisonedDelivery.attempt_count, 0);
+  assert.equal(poisonedDelivery.attempt_count, 1);
+  assert.ok(poisonedDelivery.next_attempt_at.getTime() > Date.now(), "backed off, not first in line");
   assert.equal(poisonedDelivery.response_status_code, null);
   assert.equal(poisonedDelivery.signature, null);
 
@@ -393,7 +394,7 @@ test("per-row isolation: one poisoned row (undecryptable secret) throwing before
   await assert.doesNotReject(runDispatchPass(pool, transport, config));
   const poisonedAfterSecondPass = await getDelivery(String(poisonedOutboxEvent.id), poisonedEndpoint.id);
   assert.equal(poisonedAfterSecondPass.status, "pending");
-  assert.equal(poisonedAfterSecondPass.attempt_count, 0);
+  assert.equal(poisonedAfterSecondPass.attempt_count, 1, "not due again yet");
 });
 
 test("a disabled endpoint gets no delivery row for a new event", async () => {

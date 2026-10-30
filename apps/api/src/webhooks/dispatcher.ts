@@ -228,14 +228,24 @@ async function attemptDueDeliveries(pool: Pool, transport: WebhookTransport, con
       // webhookSecretEncryptionKey) must never abort the whole pass — that
       // would couple every OTHER merchant's delivery to this one poisoned
       // row. Endpoints are never coupled to each other.
-      // Deliberately leave this row's status/attempt_count/next_attempt_at
-      // untouched: it is simply retried next pass, which self-heals if the
-      // failure was transient and otherwise degrades to "this one row never
-      // progresses" rather than "webhook delivery silently stops platform-
-      // wide."
+      // Record it as a failed attempt with the normal backoff (or exhaust
+      // it). Leaving the row untouched kept it the oldest due row forever,
+      // and once STEP_B_BATCH_LIMIT such rows existed no other delivery was
+      // ever attempted (bug 64). Backoff still retries a transient fault.
       console.error(
-        "[webhooks/dispatcher] delivery attempt threw before/around transport call, skipping row for this pass",
+        "[webhooks/dispatcher] delivery attempt threw before/around transport call; recorded as a failed attempt",
         { deliveryId: row.id, endpointId: row.endpoint_id, err },
+      );
+      const exhausted = row.attempt_count + 1 >= config.webhookMaxAttempts;
+      await pool.query(
+        `UPDATE webhook_deliveries
+            SET attempt_count = attempt_count + 1, last_attempted_at = now(),
+                status = CASE WHEN $2 THEN 'exhausted' ELSE status END,
+                next_attempt_at = now() + ($3::text || ' milliseconds')::interval,
+                response_status_code = NULL,
+                response_body_excerpt = left($4, 2000)
+          WHERE id = $1`,
+        [row.id, exhausted, backoffDelayMs(row.attempt_count + 1, config), `dispatcher error: ${String(err)}`],
       );
     }
   }
