@@ -6,7 +6,18 @@ import { formatIsoDate } from "./lib/dateFormat.js";
 import { startWebhookDispatcher, type WebhookDispatcherHandle } from "./webhooks/dispatcher.js";
 import { createFetchTransport } from "./webhooks/transport.js";
 
+const KNOWN_NODE_ENVS = ["production", "development", "test"];
+
 async function main(): Promise<void> {
+  // The server must be told what it is. loadConfig treats a missing or
+  // misspelled NODE_ENV as "development", which returns OTP codes in the
+  // login response and logs them; compose never loads ops/.env.docker, so a
+  // hosted box could run that way without anyone noticing (bug 68).
+  if (!KNOWN_NODE_ENVS.includes(process.env.NODE_ENV ?? "")) {
+    throw new Error(
+      `NODE_ENV must be one of ${KNOWN_NODE_ENVS.join(", ")} (got ${JSON.stringify(process.env.NODE_ENV ?? null)}); refusing to start`,
+    );
+  }
   const config = loadConfig(process.env);
   console.log(`[index] booting, date=${formatIsoDate(new Date())}`);
   const pool = createPool(config);

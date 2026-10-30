@@ -11,8 +11,9 @@ export interface MinimalLogger {
   info: (obj: Record<string, unknown>, msg: string) => void;
 }
 
-// logs the otp in plaintext when not production. our staging has NODE_ENV unset btw — am
-// YA: staging gets NODE_ENV=production from ops/.env.docker. fine
+// Logs the OTP in plaintext outside production. The server refuses to start
+// without an explicit NODE_ENV (index.ts, bug 68): compose never loaded
+// ops/.env.docker, so "staging gets production from .env.docker" was false.
 export function sendOtpCode(
   logger: MinimalLogger,
   config: Pick<Config, "nodeEnv">,
