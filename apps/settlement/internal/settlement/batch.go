@@ -274,29 +274,53 @@ func CloseBatch(ctx context.Context, db *pgxpool.Pool, merchantID uuid.UUID, bus
 		}
 	}
 
+	// Scheme lines and their residue legs, built in Go and written in two
+	// set-based statements (one round trip per line was the N+1).
+	var (
+		lineTxns     = make([]uuid.UUID, 0, len(lines))
+		lineAmounts  = make([]int64, 0, len(lines))
+		lineTexts    = make([]string, 0, len(lines))
+		lineSeqs     = make([]int32, 0, len(lines))
+		residueGroup []uuid.UUID
+		residueTxns  []uuid.UUID
+		residueFils  []int64
+	)
 	for i, line := range lines {
 		truncated := TruncateToSchemeAmount(line.grossFils)
 		// amount is the truncated figure the books record, written exactly
 		// (ADR-0002: the file quotes amount_fils / 1000), never the rounded gross.
+		lineTxns = append(lineTxns, line.transactionID)
+		lineAmounts = append(lineAmounts, int64(truncated))
+		lineTexts = append(lineTexts, formatFilsAsTwoDecimalString(truncated))
+		lineSeqs = append(lineSeqs, int32(i+1))
+		// ADR-0002: journal the 0-9 fils that never reach the scheme, per line
+		// (a balanced pair per line, each its own entry group).
+		if residue := line.grossFils - truncated; residue > 0 {
+			residueGroup = append(residueGroup, uuid.New())
+			residueTxns = append(residueTxns, line.transactionID)
+			residueFils = append(residueFils, int64(residue))
+		}
+	}
+	if len(lineTxns) > 0 {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO scheme_export_lines (settlement_batch_id, transaction_id, amount_fils, amount, line_sequence)
-			VALUES ($1, $2, $3, $4::numeric, $5)
-		`, batchID, line.transactionID, int64(truncated), formatFilsAsTwoDecimalString(truncated), i+1)
+			SELECT $1, l.txn, l.amt, l.amt_text::numeric, l.seq
+			  FROM unnest($2::uuid[], $3::bigint[], $4::text[], $5::int[]) AS l(txn, amt, amt_text, seq)
+		`, batchID, lineTxns, lineAmounts, lineTexts, lineSeqs)
 		if err != nil {
-			return BatchResult{}, fmt.Errorf("settlement: CloseBatch: insert scheme export line: %w", err)
+			return BatchResult{}, fmt.Errorf("settlement: CloseBatch: insert scheme export lines: %w", err)
 		}
-		// ADR-0002: journal the 0-9 fils that never reach the scheme, per line.
-		if residue := line.grossFils - truncated; residue > 0 {
-			_, err = tx.Exec(ctx, `
-				INSERT INTO ledger_entries
-				  (entry_group_id, merchant_id, transaction_id, settlement_batch_id, account_id, direction, amount_fils, occurred_at, description)
-				VALUES
-				  ($1, $2, $3, $4, 'card_scheme_clearing',    'credit', $5, now(), 'scheme rounding residue'),
-				  ($1, $2, $3, $4, 'scheme_rounding_residue', 'debit',  $5, now(), 'scheme rounding residue')
-			`, uuid.New(), merchantID, line.transactionID, batchID, int64(residue))
-			if err != nil {
-				return BatchResult{}, fmt.Errorf("settlement: CloseBatch: post scheme residue: %w", err)
-			}
+	}
+	if len(residueGroup) > 0 {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO ledger_entries
+			  (entry_group_id, merchant_id, transaction_id, settlement_batch_id, account_id, direction, amount_fils, occurred_at, description)
+			SELECT r.grp, $1, r.txn, $2, legs.account_id, legs.direction, r.amt, now(), 'scheme rounding residue'
+			  FROM unnest($3::uuid[], $4::uuid[], $5::bigint[]) AS r(grp, txn, amt)
+			 CROSS JOIN (VALUES ('card_scheme_clearing', 'credit'), ('scheme_rounding_residue', 'debit')) AS legs(account_id, direction)
+		`, merchantID, batchID, residueGroup, residueTxns, residueFils)
+		if err != nil {
+			return BatchResult{}, fmt.Errorf("settlement: CloseBatch: post scheme residue: %w", err)
 		}
 	}
 
@@ -475,8 +499,27 @@ func RunDailyBatch(ctx context.Context, db *pgxpool.Pool, businessDate time.Time
 
 	sort.Slice(merchantIDs, func(i, j int) bool { return merchantIDs[i].String() < merchantIDs[j].String() })
 
+	// Split parents, loaded once (was one EXISTS query per merchant).
+	splitParents, err := loadSplitParents(ctx, db)
+	if err != nil {
+		return DailyBatchReport{}, err
+	}
+
+	// Merchants with nothing to settle get their zero batch set-based (was
+	// ~24 statements each, for the large majority of merchants on any day).
+	var idle map[uuid.UUID]uuid.UUID
+	if onlyMerchant == nil {
+		if idle, err = closeAndPayIdleMerchants(ctx, db, merchantIDs, businessDate); err != nil {
+			return DailyBatchReport{}, err
+		}
+	}
+
 	report := DailyBatchReport{BusinessDate: businessDate}
 	for _, merchantID := range merchantIDs {
+		if batchID, ok := idle[merchantID]; ok {
+			report.MerchantResults = append(report.MerchantResults, MerchantBatchOutcome{MerchantID: merchantID, BatchID: batchID})
+			continue
+		}
 		closeResult, err := CloseBatch(ctx, db, merchantID, businessDate)
 		if err != nil {
 			if errors.Is(err, ErrMerchantNotEligible) {
@@ -492,10 +535,7 @@ func RunDailyBatch(ctx context.Context, db *pgxpool.Pool, businessDate time.Time
 		// out across those children rather than as a single lump sum to
 		// itself. CloseBatch above is identical either way — only the
 		// payout leg differs.
-		isSplitParent, err := splits.IsSplitParent(ctx, db, merchantID)
-		if err != nil {
-			return report, fmt.Errorf("settlement: RunDailyBatch: IsSplitParent(%s): %w", merchantID, err)
-		}
+		isSplitParent := splitParents[merchantID]
 
 		var alreadyPaid bool
 		if isSplitParent {
