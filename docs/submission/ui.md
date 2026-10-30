@@ -92,6 +92,28 @@ after   POST /v1/auth/login       Set-Cookie: fp_sid=…; Max-Age=600;   Path=/;
 after   POST /v1/auth/otp/verify  Set-Cookie: fp_sid=…; Max-Age=43200; Path=/; HttpOnly; SameSite=Lax
 ```
 
+### 5.8 One consistent, production-grade visual layer (dashboard, checkout, admin)
+
+**What:** a CSS-only design pass across all three front ends (commit `a00abe0`), with no markup or behaviour change. It applies:
+- one neutral grey scale and a single blue accent;
+- 14 px Inter/system type with a clear heading scale;
+- **tabular figures** so money columns line up;
+- quiet status badges (green for captured/active, amber for refunded, red for declined/voided);
+- consistent inputs with visible focus rings;
+- tables with a light header, row separators and hover;
+- the checkout as a calm card with one primary button.
+
+**Why:** this is a payments back-office, used by finance and support staff all day. The original styling was browser defaults. Bold coloured status words competed with the amounts, and the merchant dashboard, admin console and checkout looked like three different products. A quiet, dense, consistent layout makes the numbers the focus and makes status readable at a glance.
+
+| Before | After |
+|---|---|
+| ![Transactions, before](img/ui/08-design-transactions-before.png) | ![Transactions, after](img/ui/08-design-transactions-after.png) |
+| ![Refunded transaction, before](img/ui/08-design-txn-before.png) | ![Refunded transaction, after](img/ui/08-design-txn-after.png) |
+| ![Checkout, before](img/ui/08-design-checkout-before.png) | ![Checkout, after](img/ui/08-design-checkout-after.png) |
+| ![Admin merchants, before](img/ui/08-design-admin-merchants-before.png) | ![Admin merchants, after](img/ui/08-design-admin-merchants-after.png) |
+
+*Same data and the same local stack for both. "Before" is the build just before `a00abe0`, and "after" is the build with it. The change is deployed live.*
+
 ### Refund demo (fallback screenshots)
 
 These are fallback screenshots for the live demo, recorded on the local after stack on 2026-10-30 as the Alpha Retail Co owner. 1 BD = 1,000 fils.
