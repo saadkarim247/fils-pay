@@ -38,6 +38,8 @@
   code { font-family: Consolas, monospace; font-size: .9em; background: #eef1f6; padding: 0 5px; border-radius: 4px; }
   .title { justify-content: center; background: linear-gradient(135deg, #0b2a5b, #1f6feb); color: #fff; }
   .title h1 { font-size: 64px; } .title p { font-size: 26px; color: #dbe6ff; } .title .num { color: #c7d6f5; }
+  table.lt { font-size: 15.5px; } table.lt th, table.lt td { padding: 6px 8px; }
+  table.lt td:first-child { font-weight: 600; }
 </style>
 </head>
 <body>
@@ -52,6 +54,7 @@
   <div class="num">1</div>
 </section>
 
+
 <!-- 2. Root cause -->
 <section class="slide">
   <div class="kicker">Root cause</div>
@@ -65,37 +68,76 @@
   <div class="num">2</div>
 </section>
 
-<!-- 3. Key findings -->
+
+<!-- 3. Finance memo -->
 <section class="slide">
-  <div class="kicker">Key findings, ranked by impact</div>
-  <h1>Top five: real money, real accounts</h1>
-  <div class="rank">
-    <div class="n">1</div><div><h2>Merchant login never needed the OTP <span class="tag">Critical</span></h2><p>A password alone gave the full dashboard and API: the session view dropped <code>authenticated = true</code>. (02)</p></div>
-    <div class="n">2</div><div><h2>Refunds paid out money that wasn&#39;t the merchant&#39;s <span class="tag">Critical</span></h2><p>Refund another merchant&#39;s sale; refund more than was captured; two refunds sent at once both paid (FP-209). (26–28)</p></div>
-    <div class="n">3</div><div><h2>One payment link charged two buyers <span class="tag">Critical</span></h2><p>Incident 2026-05-14: a slow checkout let a second buyer re-claim the link, and both cards were captured. (23)</p></div>
-    <div class="n">4</div><div><h2>Payouts recorded and announced more than once <span class="tag">Critical</span></h2><p>Incident 2026-08-21: one disbursement instruction per webhook <i>delivery</i>, and no unique key on <code>settlement.paid</code>. (24)</p></div>
-    <div class="n">5</div><div><h2>CSV adjustments posted at a tenth of their value <span class="tag">Critical</span></h2><p>Parsed as cents: a 4,141.90 BD sheet posted 414.190 BD to the ledger (Slack, 27 Aug). (13)</p></div>
-  </div>
+  <div class="kicker">Leaflet 1 · Finance memo (Fatima H., 20 Sep)</div>
+  <h1>Every money complaint traced to a line of code</h1>
+  <table class="lt">
+    <tr><th>Concern</th><th>Root cause</th><th>Fix</th><th>Proof</th></tr>
+    <tr><td>Scheme total "always a few fils higher"</td><td>File rounded the gross; books truncated; residue never journaled</td><td>Export truncated fils, journal residue (ADR-0002)</td><td>"93.28" → "93.27" · <b>50</b></td></tr>
+    <tr><td>March sweep ran twice, gap doubled</td><td>New random id each run; debited merchants</td><td>Id per merchant and month + lock; ADR legs</td><td>2nd run posts nothing · <b>49</b></td></tr>
+    <tr><td>Delta split children ≠ parent</td><td>Each share rounded alone</td><td>Largest remainder</td><td>1,001 → 334/333/334 · <b>41</b></td></tr>
+    <tr><td>Rebuild balances 135K → 7K (FP-203)</td><td>Console rebuilt from scheme lines, not the ledger</td><td>Rebuild from the ledger (ADR-0007)</td><td>Console = CLI · <b>39</b></td></tr>
+    <tr><td>MDR recalc changes paid batches</td><td><code>status &lt;&gt; 'open'</code> includes paid</td><td><code>status = 'closed'</code></td><td>Paid batch unchanged · <b>16</b></td></tr>
+    <tr><td>Shows 245 bps, charges 225</td><td>Display ignored the effective date</td><td>Same query as capture</td><td>Both 225 · <b>18</b></td></tr>
+    <tr><td>CSV 4.75 BD → 0.475</td><td>Parsed as cents (2 dp), against ADR-0001</td><td><code>parseBhdToFils</code>; file hash unique</td><td>12/16 failing → pass · <b>13, 20</b></td></tr>
+  </table>
   <div class="num">3</div>
 </section>
 
-<!-- 4. Fixes and proof -->
+<!-- 4. Group chat + hunches -->
 <section class="slide">
-  <div class="kicker">Fixes and proof</div>
-  <h1>Each one: a small fix and a test that failed first</h1>
-  <table>
-    <tr><th>#</th><th>Fix</th><th>Proof (before → after)</th><th>Commit</th></tr>
-    <tr><td>1 · OTP (02)</td><td>Session lookup requires <code>authenticated = true</code> (one line)</td><td>Password-only cookie on <code>/v1/transactions</code>: 200 → 401; 200 again after OTP</td><td><code>0685a87</code></td></tr>
-    <tr><td>2 · Refunds (26–28)</td><td>Scope by the logged-in merchant; cap at captured, with a DB <code>CHECK</code>; one row-locked transaction</td><td>B refunds A&#39;s sale: paid → 404. 5 simultaneous refunds of 3,000 fils against a 10,000 capture: 5 paid → at most 3</td><td><code>71a8ebe</code> <code>cb044bc</code> <code>d9d4f30</code></td></tr>
-    <tr><td>3 · Link (23)</td><td>Each claim gets an owner id; the link is marked paid atomically before capture; the losing buyer is voided with a 409</td><td>Forced overlap: 2 captures → 1 capture + 409</td><td><code>351cab5</code></td></tr>
-    <tr><td>4 · Payouts (24)</td><td>Disbursement written once, inside the locked payout step; one <code>settlement.paid</code> per batch</td><td>4 concurrent runs: 4 events per batch → 1; 2 disbursements → 1</td><td><code>c0f764d</code></td></tr>
-    <tr><td>5 · CSV (13)</td><td>Parse with <code>parseBhdToFils</code> (3 decimals)</td><td>16 tests: 12 failing (414,190 vs 4,141,900 fils) → all pass</td><td><code>c797270</code></td></tr>
+  <div class="kicker">Leaflet 2 · Group chat and unfiled hunches</div>
+  <h1>Every rumour checked, and most were true</h1>
+  <table class="lt">
+    <tr><th>Concern</th><th>Root cause</th><th>Fix</th><th>#</th></tr>
+    <tr><td>"Login works without the OTP"</td><td>Session view dropped <code>authenticated = true</code></td><td>Require it: password-only cookie 200 → 401</td><td>02, 03</td></tr>
+    <tr><td>"Daily close runs at 3am"</td><td>"Today" taken from the UTC date</td><td>Bahrain date; refuse an unfinished day</td><td>17, 40</td></tr>
+    <tr><td>"Test merchants in the real settlement run"</td><td>Recompute counted 0 auths → <code>test_mode = false</code></td><td>Never touch the flag</td><td>09</td></tr>
+    <tr><td>"A cancelled B's payment link"</td><td>Cancel matched the link id only</td><td>Scope by authenticated merchant</td><td>11</td></tr>
+    <tr><td>"Lifetime estimate drifts"</td><td>Summed in float32</td><td><code>BIGINT</code> fils</td><td>57</td></tr>
+    <tr><td>"Admin actions lack role checks"</td><td>Support creates credits; view-as-merchant writes</td><td>Roles per route; impersonation read-only</td><td>07, 04, 46</td></tr>
+    <tr><td>"Key rotation doesn't do what you'd expect"</td><td>The old key was never revoked</td><td>Rotation revokes the old key</td><td>05</td></tr>
+    <tr><td>"OTP changed: still safe?"</td><td><code>Math.random</code>; guess limit could be raced</td><td><code>node:crypto</code>; atomic budget</td><td>44, 53</td></tr>
+    <tr><td>"Reporting query slow" · "large export"</td><td>Counted N times per capture · whole history in memory</td><td>One correct query · streamed CSV</td><td>42, 55</td></tr>
   </table>
-  <p class="muted" style="margin-top:12px">79 findings in total, one commit and one note each in <code>docs/bugs/points/</code>. Next by impact: settlement paid out refunded money (30), the hold job wiped all holds (14), the scheme file always a few fils over (50), float32 payouts (15).</p>
   <div class="num">4</div>
 </section>
 
-<!-- 5. Live demo -->
+<!-- 5. Tickets + incidents -->
+<section class="slide">
+  <div class="kicker">Leaflet 3 · Support tickets and incidents</div>
+  <h1>Each ticket's real cause, not the postmortem's</h1>
+  <table class="lt">
+    <tr><th>Ticket</th><th>Root cause</th><th>Fix</th><th>Proof</th></tr>
+    <tr><td><b>Incident 05-14</b>: link charged twice</td><td>Stale reservation re-claimable; 0-row finalize said "paid"</td><td>Reservation owner id; mark paid before capture</td><td>2 captures → 1 + 409 · <b>23</b></td></tr>
+    <tr><td><b>Incident 08-21</b>: duplicate payout notices</td><td>No unique key; one disbursement per webhook <i>delivery</i></td><td>One event and one disbursement per paid batch</td><td>4 events → 1 · <b>24</b></td></tr>
+    <tr><td><b>FP-209</b>: two refunds both succeed</td><td>No lock; absolute <code>refunded_fils</code> write</td><td>One row-locked transaction + DB <code>CHECK</code></td><td>5 paid → ≤ 3 · <b>28</b></td></tr>
+    <tr><td><b>FP-187</b>: link paid after expiry</td><td>Trusted the buyer's <code>submittedAt</code></td><td>Server clock</td><td>Expired → 410 · <b>38</b></td></tr>
+    <tr><td><b>FP-240</b>: signer and sender disagree</td><td>Signed sorted JSON, sent other bytes; callbacks fail open</td><td>Sign the bytes sent; signature required</td><td>Receivers verify · <b>36, 37, 12</b></td></tr>
+    <tr><td><b>FP-201</b>: duplicate callback notes</td><td>No unique key on the callback id</td><td>Unique index (0078)</td><td>2 deliveries → 1 note · <b>43</b></td></tr>
+  </table>
+  <p class="muted" style="margin-top:10px">The 1.6.0 changelog said 05-14 was fixed by de-duplicating callbacks. Callbacks only write notes, so that was never the cause.</p>
+  <div class="num">5</div>
+</section>
+
+<!-- 6. FP-300 -->
+<section class="slide">
+  <div class="kicker">Leaflet 4 · FP-300: finish the missing feature</div>
+  <h1>Refunds: "looks easy. it isn't. it touches everything."</h1>
+  <table class="lt">
+    <tr><th>Done when…</th><th>What we had to fix</th><th>#</th></tr>
+    <tr><td>Works end to end through the API</td><td>Route returned 501, drawer unwired; B could refund A's sale; a refund with no reason lost the record</td><td>35, 26, 25</td></tr>
+    <tr><td>Ledger right to the fils; fees and payouts right</td><td>Refund above the captured amount; concurrent refunds; fee reversal 22 → 21; settlement paid out refunded money</td><td>27, 28, 29, 30</td></tr>
+    <tr><td>Shop gets the right webhook</td><td><code>refund.succeeded</code> never delivered</td><td>32</td></tr>
+    <tr><td>Correct in timeline, reports and reconciliation</td><td>Refunded page crashed; reconciliation, summary view and analytics all ignored refunds</td><td>34, 31, 33, 58</td></tr>
+    <tr><td>Live on Dilmune Cloud</td><td>Deployed; full and partial refund shown on the next slide</td><td>✓</td></tr>
+  </table>
+  <div class="num">6</div>
+</section>
+
+<!-- 7. Live demo -->
 <section class="slide">
   <div class="kicker">Live demo: FP-300 refunds</div>
   <h1>A full and a partial refund, end to end</h1>
@@ -105,10 +147,36 @@
   </div>
   <div class="grid2" style="flex:none;margin-top:8px"><p><b>Full:</b> 25.000 BD → <code>refunded</code>, timeline −25.000</p><p><b>Partial:</b> 15.250 of 40.000 BD → <code>partially_refunded</code>, 24.750 left</p></div>
   <p class="muted" style="margin-top:4px">Dashboard drawer → <code>POST /v1/merchants/:id/refunds</code> → ledger reverses amount and fee to the fil → <code>refund.succeeded</code> webhook → nightly batch nets the refund out of the payout.</p>
-  <div class="num">5</div>
+  <div class="num">7</div>
 </section>
 
-<!-- 6. Under load -->
+
+<!-- 8. Performance -->
+<section class="slide">
+  <div class="kicker">Performance enhancement</div>
+  <h1>Profiling found N+1 queries in every batch job</h1>
+  <div class="grid2" style="grid-template-columns: 0.9fr 1.1fr">
+    <div>
+      <p><b>How:</b> we ran each batch job against a throwaway Postgres with <code>log_statement=all</code>, on a fixed dataset (2,003 merchants), 3 runs each. Every logged statement is one round trip.</p>
+      <p><b>Found:</b> one query per row. The nightly run spent ~24 statements on <i>every</i> merchant, including the 95% with no sales.</p>
+      <p><b>Fix:</b> set-based SQL (<code>unnest</code>, a single statement for idle merchants).</p>
+      <p><b>Proof:</b> old and new binaries gave identical totals on the same data.</p>
+    </div>
+    <div>
+      <table class="lt">
+        <tr><th>Job</th><th>Round trips</th><th>Time</th></tr>
+        <tr><td>Nightly settlement</td><td>48,370 → <b>2,833</b></td><td>21.1 s → <b>4.0 s</b></td></tr>
+        <tr><td>One 2,000-line batch</td><td>3,829 → <b>31</b></td><td>2.2 s → <b>0.9 s</b></td></tr>
+        <tr><td>Replay 500 webhooks</td><td>505 → <b>6</b></td><td>261 → <b>94 ms</b></td></tr>
+        <tr><td>Recompute 2,000 statuses</td><td>2,003 → <b>4</b></td><td>727 → <b>81 ms</b></td></tr>
+      </table>
+      <div class="imgbox" style="margin-top:10px; height:250px"><img src="../perf/2026-10-30-batch-n-plus-1.png" alt="N+1 before/after"></div>
+    </div>
+  </div>
+  <div class="num">8</div>
+</section>
+
+<!-- 9. Under load -->
 <section class="slide">
   <div class="kicker">Under load (live box: 1 vCPU, 2 GB)</div>
   <h1>About 20 checkouts a second, and it fails politely</h1>
@@ -124,10 +192,11 @@
     </div>
     <div class="imgbox"><img src="../perf/2026-10-30-live-capacity.png" alt="Live capacity before and after"></div>
   </div>
-  <div class="num">6</div>
+  <div class="num">9</div>
 </section>
 
-<!-- 7. AI -->
+
+<!-- 10. AI -->
 <section class="slide">
   <div class="kicker">How we used AI</div>
   <h1>Claude Code with parallel audit agents, on a short leash</h1>
@@ -136,10 +205,11 @@
     <div class="card"><h2>It resisted the trap</h2><p>The repo's own CLAUDE.md told AI tools that money was cents, settlement ran on UTC and tests must never change. We treated it as part of the code under audit; each of its rules pointed to a real bug.</p></div>
     <div class="card"><h2>It was wrong, and we caught it</h2><p><code>docker stats</code> said Postgres used about 5% CPU, and the AI took that at face value. The kernel's cgroup counters showed it throttled 90–95% of the time. That led us to the real cause: checkout scanned the whole ledger (finding 75).</p></div>
   </div>
-  <div class="num">7</div>
+  <div class="num">10</div>
 </section>
 
-<!-- 8. Decisions -->
+
+<!-- 11. Decisions -->
 <section class="slide">
   <div class="kicker">Decisions and open risks</div>
   <h1>What we chose not to change, and what is still open</h1>
@@ -150,8 +220,9 @@
     <li><b>Demo sandbox shows the OTP</b> in the login response so judges can log in. Production must turn this off.</li>
     <li><b>Still open:</b> one database superuser for every service; backups stay on the same box; about 60k load-test links in the live database.</li>
   </ul>
-  <div class="num">8</div>
+  <div class="num">11</div>
 </section>
+
 
 <!-- Appendix -->
 <section class="slide">

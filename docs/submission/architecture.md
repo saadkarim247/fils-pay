@@ -2,71 +2,46 @@
 
 ![FilsPay deployment: services, ports and what faces the internet](img/architecture.svg)
 
-FilsPay runs on one Dilmune Cloud VM (Ubuntu 24.04, 1 vCPU, 1.9 GiB RAM, 2 GB swap) as a single Docker Compose project, `ops/docker-compose.yml`. The firewall (ufw) lets in only ports 22, 80 and 443.
+FilsPay runs on one Dilmune Cloud VM (Ubuntu 24.04, 1 vCPU, 1.9 GiB RAM) as one Docker Compose project, `ops/docker-compose.yml`. The firewall (ufw) allows only 22, 80 and 443.
 
-| URL | What it is |
-|---|---|
-| https://165-232-180-63.sslip.io | Hosted checkout (`/pay/:token`) and merchant dashboard (`/dashboard/login`) |
-| https://admin.165-232-180-63.sslip.io | Admin console |
-| https://165-232-180-63.sslip.io/v1 | Public API (the proxy forwards `/v1/*` to the API) |
+Only **sshd (22)** and the **Caddy proxy (80/443)** face the internet. Docker bypasses ufw for any port a container publishes, so only the proxy publishes one. The API binds to `127.0.0.1:3000`, and Postgres and settlement publish nothing.
 
-Only two things face the internet: **sshd (22)** for deploys and the **Caddy proxy (80/443)**. Everything else is internal. Docker skips ufw for any port a container publishes, so we publish only the proxy on all interfaces. The API binds to `127.0.0.1:3000` on the host. Postgres and the settlement daemon publish nothing at all.
-
-### Services
-
-| Service | Port | Exposure | Limits (CPU / memory) | Restart policy | Health check |
+| Service | Port | Exposure | CPU / memory cap | Restart | Health check |
 |---|---|---|---|---|---|
-| **proxy** (Caddy) | 80, 443 | **Internet**: TLS with Let's Encrypt (auto-renew); serves the web and admin apps as static files; `/v1/*` goes to `api:3000` | 0.4 / 96 MB | unless-stopped | none; starts only once the API is healthy |
-| **api** (Node, Fastify) | 3000 | Internal, plus host loopback `127.0.0.1:3000` | 0.5 / 512 MB (V8 heap 384 MB) | unless-stopped | `GET /readyz` every 10 s, 40 s start period (`/healthz` = liveness) |
-| **settlement** (Go daemon) | 8091 | Internal only; bearer token required | 0.1 / 128 MB | unless-stopped, **stop grace 60 s** | none |
-| **reporting** worker | none | Internal only | 0.1 / 256 MB | unless-stopped | none |
-| **backup** (pg_dump) | none | Internal only | 0.1 / 64 MB | unless-stopped | none |
-| **postgres** 16 | 5432 | Internal only (not published) | 0.5 / 640 MB | unless-stopped | `pg_isready` every 2 s |
-| **migrate** (one-off) | none | Internal only | 0.5 / 384 MB | runs once per deploy, then exits | must exit 0 before api, settlement and reporting start |
+| **proxy** (Caddy) | 80, 443 | **Internet**: TLS (Let's Encrypt); serves the web and admin apps; `/v1/*` → api | 0.4 / 96 MB | unless-stopped | starts once the api is healthy |
+| **api** (Node, Fastify) | 3000 | internal + host loopback | 0.5 / 512 MB | unless-stopped | `GET /readyz` every 10 s |
+| **settlement** (Go) | 8091 | internal; bearer token | 0.1 / 128 MB | unless-stopped, **60 s stop grace** | — |
+| **reporting** worker | — | internal | 0.1 / 256 MB | unless-stopped | — |
+| **postgres** 16 | 5432 | internal, not published | 0.5 / 640 MB | unless-stopped | `pg_isready` every 2 s |
+| **backup** (pg_dump) | — | internal | 0.1 / 64 MB | unless-stopped | — |
+| **migrate** (one-off) | — | internal | 0.5 / 384 MB | once per deploy | must exit 0 first |
 
-Three things run inside the API process rather than as separate services:
-- **Acquirer simulator:** 100–400 ms per call, about 2 % declines.
-- **Webhook dispatcher:** sends signed HTTPS calls out to merchant endpoints.
-- **Checkout recovery pass:** at boot and every 60 s, it undoes checkouts abandoned mid-way (bug 74).
+The acquirer simulator, the webhook dispatcher and the checkout recovery pass run inside the API process. The CPU caps are ceilings on the shared vCPU, not reservations.
 
-The CPU limits are ceilings on the one shared vCPU, not reservations, so they add up to more than 1. Every service rotates its logs (json-file, 3 × 10 MB).
-
-### The one command to redeploy
+### Redeploy: one command
 
 ```bash
 DEPLOY_HOST=165.232.180.63 DEPLOY_USER=dilmune ops/deploy.sh
 ```
 
-Run from a laptop with the deploy SSH key, it does the following:
-1. **Refuses during the settlement window**, 23:55–00:30 Bahrain time, unless `FORCE=1` (see below).
-2. **Ships exactly the committed `HEAD`** with `git archive`, not the working tree. It warns if there are uncommitted local changes. Line endings are shipped as committed (LF), so shell scripts work on the server.
-3. **Swaps the code on the server.** It replaces the code in `~/filspay` but **keeps `ops/.env`**, and writes the revision to `~/filspay/REVISION`.
-4. **Builds, migrates and starts.** It runs `docker compose -p filspay -f ops/docker-compose.yml up -d --build --remove-orphans`, which rebuilds images, runs the `migrate` job first, then starts the services in dependency order. The fixed project name keeps the database, KYC-upload, certificate and backup volumes across deploys.
-5. **Tidies up and reports.** It rebuilds the optional seed image, prunes the build cache, then prints container status, disk and memory.
+It ships exactly the committed `HEAD` (`git archive`) and keeps the server's own `ops/.env`. Then it runs `docker compose -p filspay up -d --build`: the `migrate` job first, then the services in dependency order. Volumes survive: database, KYC uploads, certificates and backups. It refuses to run in the settlement window unless `FORCE=1`.
 
-### Where secrets come from
+### Secrets
 
-- **Created on the server, once.** `ops/init-env.sh` runs on the server a single time and writes `ops/.env` with fresh random values from `openssl rand`: the database password, the webhook-secret encryption key, the settlement internal token, the acquirer-callback signing secret, and the fixture-account passwords. The file is created with permissions 600 and the script never overwrites an existing file.
-- **Never leaves the box.** `ops/.env` is not in git, deploys never copy it, and `deploy.sh` keeps it when it replaces the code.
-- **Missing values stop the deploy.** Every secret in the compose file is written as `${VAR:?…}`, so a missing value stops `docker compose up` with a message instead of starting with an empty secret.
-- **Bug 72:** a committed `.env.docker` held a secret. It was removed; secrets now exist only in the untracked file.
-- **Bug 76:** the demo accounts' passwords used to be constants in the public repo. They are now generated per deployment, and the live accounts were reset.
+- `ops/init-env.sh` generates `ops/.env` once, **on the server**, from `openssl rand`: DB password, webhook key, internal token, callback secret and fixture passwords. The file is mode 600 and is never overwritten.
+- It is never in git and never leaves the box. Every secret in compose is `${VAR:?}`, so a missing value stops the deploy.
+- Fixed along the way: a committed secret (bug 72) and public seed passwords on the live admin (bug 76).
 
-### Health checks and restart policies
+### Health checks and restarts
 
-- **Restarts.** Every long-running service has `restart: unless-stopped`. In a crash test (laptop) Docker restarted the API in about 7 s. Checkouts cut off by the crash were repaired by the recovery pass, and the money invariants held (see Capacity).
-- **What the health checks do.** They control **start order**: the API waits for a healthy Postgres and a finished migration, and the proxy waits for a healthy API. So a deploy never sends traffic to an API that cannot reach its database.
-- **What they don't do.** `/readyz` reflects readiness at boot only, and Docker does not restart a container just for being unhealthy. Crash recovery comes from the restart policy, not from the health check.
+- **Restarts:** every service has `restart: unless-stopped`. In a crash test the API was back in ~7 s.
+- **Health checks** set start order: the API waits for a healthy Postgres and a finished migration, and the proxy waits for a healthy API. Traffic never reaches an API that can't reach its database.
 
-### How a redeploy avoids interrupting a settlement run
+### A redeploy never interrupts a settlement run
 
-The settlement daemon closes and pays out yesterday's batches at **00:15 Asia/Bahrain** (UTC+3, no daylight saving; 21:15 UTC). The run takes about 4 s for 2,000 merchants after the batch N+1 fix. A redeploy recreates the settlement container, so there are three layers of protection:
+Settlement closes yesterday at **00:15 Bahrain** (21:15 UTC) and takes ~4 s. Three layers protect it:
+1. **`deploy.sh` refuses 23:55–00:30 Bahrain** unless `FORCE=1`. It works the window out from `date -u`, so the laptop's time zone doesn't matter.
+2. **`stop_grace_period: 60s`** replaces Docker's default 10 s before a SIGKILL. On stop, an open batch transaction rolls back, so nothing is half-written.
+3. **Re-running is safe.** Each close and payout is one transaction that locks the batch row. Batches already closed or paid are skipped. The daemon re-checks on boot, and it won't close a day that hasn't ended (bug 40).
 
-1. **The deploy script refuses the window.** Between 23:55 and 00:30 Bahrain (20:55–21:30 UTC) `ops/deploy.sh` stops with a message unless `FORCE=1` is set. It computes this from `date -u`, so it doesn't depend on the laptop's time zone.
-2. **Docker waits long enough.** Docker normally kills a container 10 s after asking it to stop. Settlement has `stop_grace_period: 60s`, longer than its own 30 s limit for draining internal-API requests (`shutdownTimeout`, `apps/settlement/internal/internalapi/server.go`). On a stop signal the daemon cancels its work: an open batch transaction **rolls back**, so nothing is left half-written.
-3. **Re-running is safe and automatic.** Each merchant's close and its payout are each one database transaction that locks the batch row. Re-running a day skips batches already closed or paid. The daemon re-checks the day as soon as it starts, so a restarted daemon finishes an interrupted run within seconds. It also refuses to close a day that has not ended yet (bug 40), so restarting just before midnight cannot close today early.
-
-### Backups
-
-- **What and when:** the `backup` service writes a compressed `pg_dump` every night at 23:30 UTC (02:30 Bahrain, well clear of settlement) into its own volume, and keeps 7 days. `sh /ops/backup.sh now` takes one on demand. Restore steps are in `ops/README.md`.
-- **What it protects against:** the dumps sit on the same disk as the database, so they guard against mistakes and bad migrations, not against losing the VM. Copying them off the box is the next step.
+**Backups:** a nightly `pg_dump` at 02:30 Bahrain, 7 days kept, on the same disk. Copying it off the box is an open risk.
