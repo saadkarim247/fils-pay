@@ -21,6 +21,6 @@ Login details for the judges are on the next page. They exist only in this PDF, 
 ### Code
 
 - **Public fork:** https://github.com/saadkarim247/fils-pay
-- **Last commit before the deadline:** `77d8575` (https://github.com/saadkarim247/fils-pay/commit/77d8575)
+- **Last commit before the deadline:** shown on the cover of the submitted PDF (this file is committed before that commit exists)
 - **Per-finding notes:** `docs/bugs/points/` (one file per finding, one commit per fix)
 - **This document's sources:** `docs/submission/` (rebuild with `node docs/submission/build.mjs`)

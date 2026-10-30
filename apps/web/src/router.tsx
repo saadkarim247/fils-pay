@@ -97,6 +97,11 @@ export const router = createBrowserRouter([
           { path: "/dashboard/reconciliation", element: <ReconciliationPage /> },
 
           { path: "/dashboard/overview", element: <OverviewPage /> },
+
+          // Unknown paths go through the same guard instead of React Router's
+          // raw 404: signed out → /dashboard/login, signed in → transactions.
+          // /pay/:token sits outside this subtree and keeps its own not-found page.
+          { path: "*", element: <Navigate to="/dashboard/transactions" replace /> },
         ],
       },
     ],
