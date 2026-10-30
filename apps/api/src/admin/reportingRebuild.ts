@@ -35,5 +35,18 @@ export async function refreshAnalyticsRollups(client: PoolClient): Promise<Rebui
       GROUP BY t.merchant_id, (te.occurred_at AT TIME ZONE 'Asia/Bahrain')::date`,
   );
 
+  // Succeeded refunds per Bahrain business day, merged into the same rows
+  // (a day can have refunds and no captures).
+  await client.query(
+    `INSERT INTO merchant_daily_volume
+        (merchant_id, volume_date, refund_count, refund_gross_fils, last_updated_at)
+     SELECT merchant_id, (occurred_at AT TIME ZONE 'Asia/Bahrain')::date, COUNT(*), SUM(amount_fils), now()
+       FROM refunds
+      WHERE status = 'succeeded'
+      GROUP BY merchant_id, (occurred_at AT TIME ZONE 'Asia/Bahrain')::date
+     ON CONFLICT (merchant_id, volume_date) DO UPDATE
+       SET refund_count = EXCLUDED.refund_count, refund_gross_fils = EXCLUDED.refund_gross_fils`,
+  );
+
   return { volumeRows: volumeResult.rowCount ?? 0, trendRows: trendResult.rowCount ?? 0 };
 }

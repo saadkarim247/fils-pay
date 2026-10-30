@@ -5,11 +5,13 @@ import type { ReportingConfig } from "../config.js";
 import { readCursor, advanceCursor } from "./cursor.js";
 import { applyEvent, type OutboxEventRow } from "./applyEvent.js";
 
-// am: refund.succeeded not here yet. when refunds ship just add it to the list
+// Every type listed here must have a case in applyEvent (its default throws
+// and would stop the worker) and somewhere to land in the rollups.
 export const REPORTING_EVENT_TYPES: readonly EventType[] = [
   "transaction.captured",
   "transaction.voided",
   "settlement.batch_closed",
+  "refund.succeeded",
 ];
 
 /**

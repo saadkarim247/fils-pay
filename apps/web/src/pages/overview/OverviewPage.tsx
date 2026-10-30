@@ -112,6 +112,7 @@ export function OverviewPage() {
             <th>Captured</th>
             <th>Gross</th>
             <th>Voided</th>
+            <th>Refunded</th>
             <th />
           </tr>
         </thead>
@@ -122,6 +123,11 @@ export function OverviewPage() {
               <td>{formatCount(point.capturedCount)}</td>
               <td>{bhd(point.capturedGrossFils)}</td>
               <td>{formatCount(point.voidedCount)}</td>
+              <td>
+                {point.refundCount > 0
+                  ? `${bhd(point.refundGrossFils)} (${formatCount(point.refundCount)})`
+                  : "—"}
+              </td>
               <td className="dash-bar-cell">
                 {/* A plain CSS bar, scaled to the window's own peak — no
                     charting library, no new dependency. */}
@@ -134,7 +140,7 @@ export function OverviewPage() {
           ))}
           {volumes && volumes.points.length === 0 ? (
             <tr>
-              <td colSpan={5}>No captured volume in this window.</td>
+              <td colSpan={6}>No captured volume in this window.</td>
             </tr>
           ) : null}
         </tbody>
