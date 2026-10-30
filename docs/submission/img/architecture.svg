@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" width="900" height="720" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#1f2933">
+  <title>FilsPay deployment: services, ports and what faces the internet</title>
+  <defs>
+    <marker id="aIn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2611f"/></marker>
+    <marker id="aInt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5f98"/></marker>
+    <marker id="aOut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="720" fill="#ffffff"/>
+
+  <text x="20" y="32" font-size="18" font-weight="bold">FilsPay on Dilmune Cloud: services, ports, exposure</text>
+  <text x="20" y="50" font-size="12" fill="#52606d">One VM, one Docker Compose project (ops/docker-compose.yml). Limits are CPU share of the single vCPU / memory cap.</text>
+
+  <!-- Internet column -->
+  <rect x="20" y="65" width="170" height="555" rx="8" fill="#f3f4f6" stroke="#9ca3af"/>
+  <text x="105" y="85" text-anchor="middle" font-weight="bold" font-size="14">Internet</text>
+
+  <rect x="32" y="97" width="146" height="44" rx="5" fill="#ffffff" stroke="#9ca3af"/>
+  <text x="105" y="115" text-anchor="middle" font-weight="bold">Operators</text>
+  <text x="105" y="131" text-anchor="middle" font-size="11">ssh key, runs deploy.sh</text>
+
+  <rect x="32" y="150" width="146" height="44" rx="5" fill="#ffffff" stroke="#9ca3af" stroke-dasharray="4 3"/>
+  <text x="105" y="168" text-anchor="middle" font-weight="bold">Merchant webhook URLs</text>
+  <text x="105" y="184" text-anchor="middle" font-size="11">Let's Encrypt (ACME)</text>
+
+  <rect x="32" y="203" width="146" height="78" rx="5" fill="#ffffff" stroke="#9ca3af"/>
+  <text x="105" y="221" text-anchor="middle" font-weight="bold">Browsers (HTTPS)</text>
+  <text x="105" y="237" text-anchor="middle" font-size="11">buyers: /pay/:token</text>
+  <text x="105" y="251" text-anchor="middle" font-size="11">merchants: /dashboard</text>
+  <text x="105" y="265" text-anchor="middle" font-size="11">admins: admin.* host</text>
+  <text x="105" y="278" text-anchor="middle" font-size="11">API clients: /v1</text>
+
+  <text x="105" y="320" text-anchor="middle" font-size="11" font-weight="bold">Not reachable from</text>
+  <text x="105" y="335" text-anchor="middle" font-size="11" font-weight="bold">the internet:</text>
+  <text x="105" y="353" text-anchor="middle" font-size="11">3000 (loopback only)</text>
+  <text x="105" y="368" text-anchor="middle" font-size="11">5432 (not published)</text>
+  <text x="105" y="383" text-anchor="middle" font-size="11">8091 (not published)</text>
+  <text x="105" y="410" text-anchor="middle" font-size="10.5" fill="#52606d">Docker bypasses ufw for</text>
+  <text x="105" y="424" text-anchor="middle" font-size="10.5" fill="#52606d">published ports, so only the</text>
+  <text x="105" y="438" text-anchor="middle" font-size="10.5" fill="#52606d">proxy publishes on 0.0.0.0.</text>
+
+  <!-- ufw -->
+  <rect x="210" y="65" width="74" height="555" rx="8" fill="#fff4e8" stroke="#c2611f" stroke-width="1.5"/>
+  <text x="247" y="85" text-anchor="middle" font-weight="bold" font-size="14">ufw</text>
+  <text x="247" y="101" text-anchor="middle" font-size="10.5">allow in:</text>
+  <text x="247" y="124" text-anchor="middle" font-weight="bold">22</text>
+  <text x="247" y="238" text-anchor="middle" font-weight="bold">80 443</text>
+  <text x="247" y="300" text-anchor="middle" font-size="10.5">all other</text>
+  <text x="247" y="314" text-anchor="middle" font-size="10.5">inbound</text>
+  <text x="247" y="328" text-anchor="middle" font-size="10.5">dropped</text>
+
+  <!-- Host -->
+  <rect x="300" y="65" width="580" height="555" rx="8" fill="#fbfcfd" stroke="#52606d" stroke-width="1.5"/>
+  <text x="315" y="85" font-weight="bold" font-size="14">VM "Gameover": Ubuntu 24.04, 1 vCPU, 1.9 GiB RAM, 2 GB swap</text>
+
+  <rect x="315" y="97" width="200" height="44" rx="5" fill="#fde7d2" stroke="#c2611f" stroke-width="1.5"/>
+  <text x="415" y="115" text-anchor="middle" font-weight="bold">sshd :22 (host)</text>
+  <text x="415" y="131" text-anchor="middle" font-size="11">deploy.sh ships git HEAD here</text>
+
+  <!-- Docker network -->
+  <rect x="312" y="160" width="556" height="450" rx="8" fill="#f7f9fc" stroke="#7b8794" stroke-dasharray="6 4"/>
+  <text x="858" y="176" text-anchor="end" font-size="11" fill="#52606d">Docker network (project "filspay")</text>
+
+  <!-- proxy -->
+  <rect x="325" y="185" width="200" height="100" rx="6" fill="#fde7d2" stroke="#c2611f" stroke-width="2"/>
+  <text x="425" y="204" text-anchor="middle" font-weight="bold" font-size="13">proxy: Caddy</text>
+  <text x="425" y="220" text-anchor="middle" font-size="11">publishes 0.0.0.0:80 and :443</text>
+  <text x="425" y="235" text-anchor="middle" font-size="11">TLS via Let's Encrypt</text>
+  <text x="425" y="250" text-anchor="middle" font-size="11">serves web + admin (static)</text>
+  <text x="425" y="265" text-anchor="middle" font-size="11">/v1/* to api:3000</text>
+  <text x="425" y="279" text-anchor="middle" font-size="10.5" fill="#52606d">0.4 CPU / 96 MB</text>
+
+  <!-- api -->
+  <rect x="560" y="185" width="260" height="135" rx="6" fill="#e3eef9" stroke="#2f5f98" stroke-width="2"/>
+  <text x="690" y="204" text-anchor="middle" font-weight="bold" font-size="13">api: Node / Fastify :3000</text>
+  <text x="690" y="220" text-anchor="middle" font-size="11">host port 127.0.0.1:3000 only</text>
+  <text x="690" y="237" text-anchor="middle" font-size="11">inside the same process:</text>
+  <text x="690" y="252" text-anchor="middle" font-size="11">acquirer simulator (100-400 ms/call)</text>
+  <text x="690" y="267" text-anchor="middle" font-size="11">webhook dispatcher (outbound)</text>
+  <text x="690" y="282" text-anchor="middle" font-size="11">checkout recovery pass (every 60 s)</text>
+  <text x="690" y="297" text-anchor="middle" font-size="11">load shedding: 503 + Retry-After</text>
+  <text x="690" y="313" text-anchor="middle" font-size="10.5" fill="#52606d">0.5 CPU / 512 MB, pool 20, health /readyz</text>
+
+  <!-- settlement -->
+  <rect x="560" y="345" width="260" height="100" rx="6" fill="#e3eef9" stroke="#2f5f98" stroke-width="2"/>
+  <text x="690" y="364" text-anchor="middle" font-weight="bold" font-size="13">settlement: Go daemon</text>
+  <text x="690" y="380" text-anchor="middle" font-size="11">internal API :8091 (bearer token)</text>
+  <text x="690" y="395" text-anchor="middle" font-size="11">daily close at 00:15 Asia/Bahrain</text>
+  <text x="690" y="410" text-anchor="middle" font-size="11">stop grace 60 s; idempotent re-run</text>
+  <text x="690" y="426" text-anchor="middle" font-size="10.5" fill="#52606d">0.1 CPU / 128 MB</text>
+
+  <!-- reporting -->
+  <rect x="325" y="305" width="200" height="60" rx="6" fill="#e3eef9" stroke="#2f5f98" stroke-width="2"/>
+  <text x="425" y="324" text-anchor="middle" font-weight="bold" font-size="13">reporting worker</text>
+  <text x="425" y="340" text-anchor="middle" font-size="11">outbox to rollups, no port</text>
+  <text x="425" y="356" text-anchor="middle" font-size="10.5" fill="#52606d">0.1 CPU / 256 MB</text>
+
+  <!-- backup -->
+  <rect x="325" y="380" width="200" height="60" rx="6" fill="#e3eef9" stroke="#2f5f98" stroke-width="2"/>
+  <text x="425" y="399" text-anchor="middle" font-weight="bold" font-size="13">backup</text>
+  <text x="425" y="415" text-anchor="middle" font-size="11">pg_dump 23:30 UTC, keeps 7</text>
+  <text x="425" y="431" text-anchor="middle" font-size="10.5" fill="#52606d">0.1 CPU / 64 MB, no port</text>
+
+  <!-- migrate -->
+  <rect x="325" y="455" width="200" height="45" rx="6" fill="#e3eef9" stroke="#2f5f98" stroke-width="1.5" stroke-dasharray="5 3"/>
+  <text x="425" y="474" text-anchor="middle" font-weight="bold">migrate (one-off)</text>
+  <text x="425" y="490" text-anchor="middle" font-size="11">runs before api starts, exits</text>
+
+  <!-- postgres -->
+  <rect x="325" y="530" width="530" height="65" rx="6" fill="#d5e4f5" stroke="#2f5f98" stroke-width="2"/>
+  <text x="590" y="551" text-anchor="middle" font-weight="bold" font-size="13">postgres 16 :5432 (not published: reachable only on the Docker network)</text>
+  <text x="590" y="568" text-anchor="middle" font-size="11">volume filspay_pgdata; max_connections 60; health pg_isready</text>
+  <text x="590" y="584" text-anchor="middle" font-size="10.5" fill="#52606d">0.5 CPU / 640 MB</text>
+
+  <!-- inbound arrows -->
+  <line x1="178" y1="119" x2="315" y2="119" stroke="#c2611f" stroke-width="2" marker-end="url(#aIn)"/>
+  <line x1="178" y1="242" x2="325" y2="242" stroke="#c2611f" stroke-width="2.5" marker-end="url(#aIn)"/>
+
+  <!-- internal arrows -->
+  <line x1="525" y1="242" x2="560" y2="242" stroke="#2f5f98" stroke-width="2" marker-end="url(#aInt)"/>
+  <line x1="690" y1="320" x2="690" y2="345" stroke="#2f5f98" stroke-width="2" marker-end="url(#aInt)"/>
+  <text x="696" y="337" font-size="10.5" fill="#2f5f98">:8091</text>
+  <!-- api to postgres lane -->
+  <polyline points="820,300 842,300 842,530" fill="none" stroke="#2f5f98" stroke-width="2" marker-end="url(#aInt)"/>
+  <!-- settlement to postgres -->
+  <line x1="690" y1="445" x2="690" y2="530" stroke="#2f5f98" stroke-width="2" marker-end="url(#aInt)"/>
+  <!-- left column lane to postgres -->
+  <polyline points="525,335 542,335 542,530" fill="none" stroke="#2f5f98" stroke-width="2" marker-end="url(#aInt)"/>
+  <line x1="525" y1="410" x2="542" y2="410" stroke="#2f5f98" stroke-width="2"/>
+  <line x1="525" y1="477" x2="542" y2="477" stroke="#2f5f98" stroke-width="2"/>
+  <text x="548" y="520" font-size="10.5" fill="#2f5f98">SQL :5432</text>
+
+  <!-- outbound -->
+  <polyline points="760,185 760,151 178,151" fill="none" stroke="#6b7280" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#aOut)"/>
+  <line x1="425" y1="185" x2="425" y2="151" stroke="#6b7280" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="600" y="146" font-size="10.5" fill="#4b5563">outbound HTTPS: webhooks (api), certificates (proxy)</text>
+
+  <!-- legend -->
+  <rect x="20" y="635" width="860" height="70" rx="8" fill="#ffffff" stroke="#cbd2d9"/>
+  <text x="35" y="655" font-weight="bold">Legend</text>
+  <rect x="35" y="665" width="22" height="14" rx="3" fill="#fde7d2" stroke="#c2611f" stroke-width="2"/>
+  <text x="63" y="676">internet-facing (reachable through ufw)</text>
+  <rect x="300" y="665" width="22" height="14" rx="3" fill="#e3eef9" stroke="#2f5f98" stroke-width="2"/>
+  <text x="328" y="676">internal only (Docker network)</text>
+  <rect x="520" y="665" width="22" height="14" rx="3" fill="#e3eef9" stroke="#2f5f98" stroke-dasharray="4 2"/>
+  <text x="548" y="676">one-off job</text>
+  <line x1="35" y1="694" x2="70" y2="694" stroke="#c2611f" stroke-width="2.5" marker-end="url(#aIn)"/>
+  <text x="78" y="698">inbound request</text>
+  <line x1="200" y1="694" x2="235" y2="694" stroke="#2f5f98" stroke-width="2" marker-end="url(#aInt)"/>
+  <text x="243" y="698">internal call</text>
+  <line x1="340" y1="694" x2="375" y2="694" stroke="#6b7280" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#aOut)"/>
+  <text x="383" y="698">outbound connection (ufw allows outgoing)</text>
+  <text x="650" y="676" font-size="11" fill="#52606d">All long-running services:</text>
+  <text x="650" y="692" font-size="11" fill="#52606d">restart: unless-stopped</text>
+</svg>

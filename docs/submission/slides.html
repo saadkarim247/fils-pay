@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FilsPay: The Handover (slides)</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  :root { --ink: #14213d; --muted: #5b6577; --accent: #1f6feb; --bad: #c0392b; --good: #1e8449; --bg: #ffffff; --panel: #f3f6fb; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Segoe UI", Calibri, Arial, sans-serif; }
+  .slide { width: 1280px; height: 720px; padding: 56px 72px 48px; position: relative; overflow: hidden; break-after: page; display: flex; flex-direction: column; }
+  .slide:last-child { break-after: auto; }
+  .num { position: absolute; right: 40px; bottom: 26px; color: var(--muted); font-size: 16px; }
+  .kicker { color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 16px; margin-bottom: 8px; }
+  h1 { font-size: 46px; margin: 0 0 22px; line-height: 1.1; }
+  h2 { font-size: 26px; margin: 0 0 10px; }
+  p, li { font-size: 22px; line-height: 1.4; margin: 0 0 10px; }
+  ul { margin: 0; padding-left: 26px; }
+  .muted { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; flex: 1; min-height: 0; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card { background: var(--panel); border-radius: 12px; padding: 18px 22px; }
+  .card h2 { font-size: 22px; }
+  .card p, .card li { font-size: 18px; }
+  .big { font-size: 64px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .rank { display: grid; grid-template-columns: 52px 1fr; gap: 10px 16px; align-items: start; }
+  .rank .n { font-size: 34px; font-weight: 800; color: var(--accent); }
+  .rank h2 { font-size: 23px; margin: 4px 0 2px; }
+  .rank p { font-size: 18px; color: var(--muted); margin: 0 0 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 18px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #d7dde8; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; border: 1px solid #d7dde8; }
+  .imgbox { display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .quote { font-size: 30px; line-height: 1.35; font-weight: 600; border-left: 6px solid var(--accent); padding-left: 22px; margin: 6px 0 26px; }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 15px; font-weight: 700; color: #fff; background: var(--bad); vertical-align: middle; }
+  .tag.ok { background: var(--good); }
+  code { font-family: Consolas, monospace; font-size: .9em; background: #eef1f6; padding: 0 5px; border-radius: 4px; }
+  .title { justify-content: center; background: linear-gradient(135deg, #0b2a5b, #1f6feb); color: #fff; }
+  .title h1 { font-size: 64px; } .title p { font-size: 26px; color: #dbe6ff; } .title .num { color: #c7d6f5; }
+</style>
+</head>
+<body>
+
+<!-- 1. Team -->
+<section class="slide title">
+  <div class="kicker" style="color:#bcd2ff">The Handover · FilsPay</div>
+  <h1>TEAM_NAME_TBD</h1>
+  <p><b>Saad Karim</b>: MEMBER_ROLES_TBD</p>
+  <p style="margin-top:40px">79 findings fixed · refunds (FP-300) shipped end to end · live on Dilmune Cloud</p>
+  <p>https://165-232-180-63.sslip.io · github.com/saadkarim247/fils-pay</p>
+  <div class="num">1</div>
+</section>
+
+<!-- 2. Root cause -->
+<section class="slide">
+  <div class="kicker">Root cause</div>
+  <h1>One problem behind most of the bugs</h1>
+  <div class="quote">The code followed claims nobody checked (AI rule files, "intentional" comments and tests that locked bugs in) instead of the ADRs, and the database enforced none of the money rules.</div>
+  <div class="grid3">
+    <div class="card"><h2>Planted rules</h2><p>CLAUDE.md, AGENTS.md and .cursorrules said cents, UTC midnight, "never edit tests" and "Math.random is fine". Each one hid a real bug.</p></div>
+    <div class="card"><h2>Money outside integer fils</h2><p>A cents parser, float32 payouts, an int32 counter, and parts of an amount rounded one at a time.</p></div>
+    <div class="card"><h2>Read-then-write, no locks</h2><p>Two refunds both paid, two buyers on one link, duplicate payouts, the same CSV applied twice.</p></div>
+  </div>
+  <div class="num">2</div>
+</section>
+
+<!-- 3. Key findings -->
+<section class="slide">
+  <div class="kicker">Key findings, ranked by impact</div>
+  <h1>Top five: real money, real accounts</h1>
+  <div class="rank">
+    <div class="n">1</div><div><h2>Merchant login never needed the OTP <span class="tag">Critical</span></h2><p>A password alone gave the full dashboard and API: the session view dropped <code>authenticated = true</code>. (02)</p></div>
+    <div class="n">2</div><div><h2>Refunds paid out money that wasn&#39;t the merchant&#39;s <span class="tag">Critical</span></h2><p>Refund another merchant&#39;s sale; refund more than was captured; two refunds sent at once both paid (FP-209). (26–28)</p></div>
+    <div class="n">3</div><div><h2>One payment link charged two buyers <span class="tag">Critical</span></h2><p>Incident 2026-05-14: a slow checkout let a second buyer re-claim the link, and both cards were captured. (23)</p></div>
+    <div class="n">4</div><div><h2>Payouts recorded and announced more than once <span class="tag">Critical</span></h2><p>Incident 2026-08-21: one disbursement instruction per webhook <i>delivery</i>, and no unique key on <code>settlement.paid</code>. (24)</p></div>
+    <div class="n">5</div><div><h2>CSV adjustments posted at a tenth of their value <span class="tag">Critical</span></h2><p>Parsed as cents: a 4,141.90 BD sheet posted 414.190 BD to the ledger (Slack, 27 Aug). (13)</p></div>
+  </div>
+  <div class="num">3</div>
+</section>
+
+<!-- 4. Fixes and proof -->
+<section class="slide">
+  <div class="kicker">Fixes and proof</div>
+  <h1>Each one: a small fix and a test that failed first</h1>
+  <table>
+    <tr><th>#</th><th>Fix</th><th>Proof (before → after)</th><th>Commit</th></tr>
+    <tr><td>1 · OTP (02)</td><td>Session lookup requires <code>authenticated = true</code> (one line)</td><td>Password-only cookie on <code>/v1/transactions</code>: 200 → 401; 200 again after OTP</td><td><code>0685a87</code></td></tr>
+    <tr><td>2 · Refunds (26–28)</td><td>Scope by the logged-in merchant; cap at captured, with a DB <code>CHECK</code>; one row-locked transaction</td><td>B refunds A&#39;s sale: paid → 404. 5 simultaneous refunds of 3,000 fils against a 10,000 capture: 5 paid → at most 3</td><td><code>71a8ebe</code> <code>cb044bc</code> <code>d9d4f30</code></td></tr>
+    <tr><td>3 · Link (23)</td><td>Each claim gets an owner id; the link is marked paid atomically before capture; the losing buyer is voided with a 409</td><td>Forced overlap: 2 captures → 1 capture + 409</td><td><code>351cab5</code></td></tr>
+    <tr><td>4 · Payouts (24)</td><td>Disbursement written once, inside the locked payout step; one <code>settlement.paid</code> per batch</td><td>4 concurrent runs: 4 events per batch → 1; 2 disbursements → 1</td><td><code>c0f764d</code></td></tr>
+    <tr><td>5 · CSV (13)</td><td>Parse with <code>parseBhdToFils</code> (3 decimals)</td><td>16 tests: 12 failing (414,190 vs 4,141,900 fils) → all pass</td><td><code>c797270</code></td></tr>
+  </table>
+  <p class="muted" style="margin-top:12px">79 findings in total, one commit and one note each in <code>docs/bugs/points/</code>. Next by impact: settlement paid out refunded money (30), the hold job wiped all holds (14), the scheme file always a few fils over (50), float32 payouts (15).</p>
+  <div class="num">4</div>
+</section>
+
+<!-- 5. Live demo -->
+<section class="slide">
+  <div class="kicker">Live demo: FP-300 refunds</div>
+  <h1>A full and a partial refund, end to end</h1>
+  <div class="grid2">
+    <div class="imgbox"><img src="img/ui/refund-full.png" alt="Full refund (screenshot pending)"></div>
+    <div class="imgbox"><img src="img/ui/refund-partial.png" alt="Partial refund (screenshot pending)"></div>
+  </div>
+  <p class="muted" style="margin-top:12px">Dashboard drawer → <code>POST /v1/merchants/:id/refunds</code> → ledger reverses amount and fee to the fil → <code>refund.succeeded</code> webhook → nightly batch nets the refund out of the payout.</p>
+  <div class="num">5</div>
+</section>
+
+<!-- 6. Under load -->
+<section class="slide">
+  <div class="kicker">Under load (live box: 1 vCPU, 2 GB)</div>
+  <h1>About 20 checkouts a second, and it fails politely</h1>
+  <div class="grid2">
+    <div>
+      <div class="grid2" style="grid-template-columns:1fr 1fr; gap:16px; flex:none">
+        <div class="card"><div class="big">20/s</div><p>checkouts/s sustained, 21/s peak: about 1,200 buyers a minute</p></div>
+        <div class="card"><div class="big">0</div><p>errors at 150/s offered; excess gets 503 + Retry-After in 3–4 ms (server)</p></div>
+        <div class="card"><div class="big">2×</div><p>after one missing-index fix (75): 9 → 16–18/s</p></div>
+        <div class="card"><div class="big">7 s</div><p>crash → back up; half-done checkouts repaired, money invariants hold</p></div>
+      </div>
+      <p class="muted" style="margin-top:14px">Measured with k6 against the live box over HTTPS; money invariants checked after every run. The limit was Postgres CPU until bug 75. It is now the 20-connection pool held through the acquirer call, and the single vCPU is next.</p>
+    </div>
+    <div class="imgbox"><img src="../perf/2026-10-30-live-capacity.png" alt="Live capacity before and after"></div>
+  </div>
+  <div class="num">6</div>
+</section>
+
+<!-- 7. AI -->
+<section class="slide">
+  <div class="kicker">How we used AI</div>
+  <h1>Claude Code with parallel audit agents, on a short leash</h1>
+  <p><b>Setup:</b> the brief and ADRs as the only truth, every doc claim checked in the code, one bug per commit, tests on a fresh database. The rules files, commands and scripts are in <code>.claude/</code> and <code>tools/</code>.</p>
+  <div class="grid2" style="margin-top:12px">
+    <div class="card"><h2>It resisted the trap</h2><p>The repo's own CLAUDE.md told AI tools that money was cents, settlement ran on UTC and tests must never change. We treated it as part of the code under audit; each of its rules pointed to a real bug.</p></div>
+    <div class="card"><h2>It was wrong, and we caught it</h2><p><code>docker stats</code> said Postgres used about 5% CPU, and the AI took that at face value. The kernel's cgroup counters showed it throttled 90–95% of the time. That led us to the real cause: checkout scanned the whole ledger (finding 75).</p></div>
+  </div>
+  <div class="num">7</div>
+</section>
+
+<!-- 8. Decisions -->
+<section class="slide">
+  <div class="kicker">Decisions and open risks</div>
+  <h1>What we chose not to change, and what is still open</h1>
+  <ul>
+    <li><b>Historical data was not corrected.</b> CSV imports, paid batches rewritten by the MDR recalculation, unposted scheme residue and sandbox merchants switched live all need a correction reviewed by finance. We ran no corrections on any database.</li>
+    <li><b>ADR-0005 numbering</b> (0054–0056 reused) is left as it is: renaming applied migrations would re-run them. The fix needs a migration-tracking change.</li>
+    <li><b>ADR-0004 → ADR-0007 (proposed):</b> rebuilding balances from the ledger needs the owner's sign-off.</li>
+    <li><b>Demo sandbox shows the OTP</b> in the login response so judges can log in. Production must turn this off.</li>
+    <li><b>Still open:</b> one database superuser for every service; backups stay on the same box; about 60k load-test links in the live database.</li>
+  </ul>
+  <div class="num">8</div>
+</section>
+
+<!-- Appendix -->
+<section class="slide">
+  <div class="kicker">Appendix</div>
+  <h1>Evidence</h1>
+  <div class="grid2">
+    <div class="imgbox"><img src="../perf/2026-10-30-checkout-capacity.png" alt="Checkout capacity"></div>
+    <div class="imgbox"><img src="../perf/2026-10-30-batch-n-plus-1.png" alt="Batch N+1 before/after"></div>
+  </div>
+  <p class="muted" style="margin-top:10px">Full findings with reproduction, verification and data impact: submission document, section 4. Load-test harness: <code>perf/checkout/</code>.</p>
+  <div class="num">A</div>
+</section>
+
+</body>
+</html>
