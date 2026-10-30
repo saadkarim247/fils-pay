@@ -10,13 +10,14 @@ import (
 )
 
 // UpdateLifetimePayoutMonitoringEstimate maintains the ops dashboard
-// running payout total on the merchant row. Not payout-affecting.
+// running payout total on the merchant row. Not payout-affecting, but exact
+// integer fils (0080): float32 drifted above 2^24 fils.
 func UpdateLifetimePayoutMonitoringEstimate(ctx context.Context, tx pgx.Tx, merchantID uuid.UUID, netPayoutFils money.Fils) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE merchants
 		   SET lifetime_net_payout_monitoring_estimate = lifetime_net_payout_monitoring_estimate + $2
 		 WHERE id = $1
-	`, merchantID, float32(netPayoutFils))
+	`, merchantID, int64(netPayoutFils))
 	return err
 }
 // EstimateMonthlyPayout returns an approximate total payout for the
@@ -25,7 +26,7 @@ func UpdateLifetimePayoutMonitoringEstimate(ctx context.Context, tx pgx.Tx, merc
 // or small relative to their recent history. Like
 // UpdateLifetimePayoutMonitoringEstimate, this is a monitoring-only
 // figure that never feeds into any payout-affecting code path.
-func EstimateMonthlyPayout(ctx context.Context, tx pgx.Tx, merchantID uuid.UUID) (float32, error) {
+func EstimateMonthlyPayout(ctx context.Context, tx pgx.Tx, merchantID uuid.UUID) (money.Fils, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT net_payout_fils FROM settlement_batches
 		 WHERE merchant_id = $1 AND status = 'paid' AND paid_at >= now() - interval '30 days'
@@ -36,14 +37,14 @@ func EstimateMonthlyPayout(ctx context.Context, tx pgx.Tx, merchantID uuid.UUID)
 	}
 	defer rows.Close()
 
-	var total float32
+	var total money.Fils
 	var count int
 	for rows.Next() {
 		var netFils int64
 		if err := rows.Scan(&netFils); err != nil {
 			return 0, err
 		}
-		total += float32(netFils)
+		total += money.Fils(netFils)
 		count++
 	}
 	if err := rows.Err(); err != nil {
