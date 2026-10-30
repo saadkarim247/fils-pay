@@ -26,6 +26,7 @@ const SECTIONS = [
   { file: "ui.md" },
   { text: "## 6. AI usage\n" },
   { file: "ai-setup.md", minLevel: 3 },
+  { file: "ai-approach.md", minLevel: 3 },
   { file: "ai-excerpts.md", minLevel: 3 },
   { text: "## Appendix A. Every finding in full\n\nSymptom, how it was found and reproduced, root cause, fix, verification and effect on existing data, one entry per finding. The same material is in `docs/bugs/points/`.\n" },
   { file: "findings-01-40.md", shift: 1 },

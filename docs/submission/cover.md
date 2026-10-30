@@ -1,10 +1,11 @@
 # FilsPay: The Handover
 
-**Team:** TEAM_NAME_TBD
+**Team:** Gameover
 
 | Member | Owned |
 |---|---|
-| Saad Karim | MEMBER_ROLES_TBD |
+| Saad Karim | ROLE_SAAD_TBD |
+| Maaz Karim | ROLE_MAAZ_TBD |
 
 ### Live deployment (Dilmune Cloud)
 
