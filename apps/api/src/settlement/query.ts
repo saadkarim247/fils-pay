@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { estimateFeeFils } from "../fees/estimate.js";
+import { applyRateFils, toFils } from "@filspay/money";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -300,8 +300,10 @@ export async function getReconciliationReport(
           AND status IN ('closed', 'paid')`,
       [input.merchantId, input.from, input.to],
     ),
-    pool.query<{ amount_fils: string | number }>(
-      `SELECT te.amount_fils
+    // Each unbatched capture event with the fee capture actually charged for
+    // it (recorded on the event), never a re-estimate.
+    pool.query<{ amount_fils: string | number; fee_fils: string | number | null }>(
+      `SELECT te.amount_fils, te.metadata->>'feeFils' AS fee_fils
          FROM transaction_events te
          JOIN transactions t ON t.id = te.transaction_id
         WHERE t.merchant_id = $1 AND te.event_type IN ('captured', 'partially_captured')
@@ -324,17 +326,17 @@ export async function getReconciliationReport(
     ),
   ]);
 
-  // MK: merchants.mdr_bps is kept in sync with the current fee_schedules row by the 0046 trigger,
-  // so reading it here is the same as resolving the schedule
   const merchant = merchantResult.rows[0];
-  const mdrBps = merchant?.mdr_bps ?? 0;
   const discountBps = merchant?.negotiated_discount_bps ?? 0;
 
   let pendingUnbatchedFils = 0;
   for (const row of pendingResult.rows) {
     const amountFils = Number(row.amount_fils);
-    const feeFils = estimateFeeFils(amountFils, mdrBps, discountBps);
-    pendingUnbatchedFils += amountFils - feeFils;
+    const feeCharged = toFils(Number(row.fee_fils ?? 0));
+    // The negotiated-discount rebate, computed exactly as
+    // applyCaptureDiscountAdjustment posts it.
+    const rebate = discountBps > 0 ? applyRateFils(feeCharged, discountBps) : 0;
+    pendingUnbatchedFils += amountFils - feeCharged + rebate;
   }
   pendingUnbatchedFils -= Number(pendingRefundsResult.rows[0]?.net ?? 0);
 
