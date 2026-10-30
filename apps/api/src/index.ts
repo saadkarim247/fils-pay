@@ -5,6 +5,7 @@ import { markDbConnectedOnce } from "./health/state.js";
 import { formatIsoDate } from "./lib/dateFormat.js";
 import { startWebhookDispatcher, type WebhookDispatcherHandle } from "./webhooks/dispatcher.js";
 import { createFetchTransport } from "./webhooks/transport.js";
+import { recoverAbandonedCheckouts } from "./paymentLinks/recoverAbandoned.js";
 
 const KNOWN_NODE_ENVS = ["production", "development", "test"];
 
@@ -30,6 +31,20 @@ async function main(): Promise<void> {
   await pool.query("SELECT 1");
   markDbConnectedOnce();
 
+  // Recover checkouts a crash left half-done (bug 74): once at boot, then
+  // every minute. Only states older than the reservation timeout are touched.
+  const recover = async (when: string): Promise<void> => {
+    try {
+      const r = await recoverAbandonedCheckouts(pool, { olderThanSeconds: config.paymentLinkReservationTimeoutSeconds });
+      if (r.uncommitted + r.released + r.orphansVoided > 0) console.warn(`[index] recovered abandoned checkouts (${when})`, r);
+    } catch (err) {
+      console.error(`[index] checkout recovery failed (${when})`, err);
+    }
+  };
+  await recover("boot");
+  const recoveryTimer = setInterval(() => void recover("periodic"), 60_000);
+  recoveryTimer.unref();
+
   // YA: 0.0.0.0 is required inside docker. not a finding
   await app.listen({ port: config.port, host: "0.0.0.0" });
 
@@ -50,6 +65,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string): void => {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(recoveryTimer);
     console.log(`[index] received ${signal}, shutting down`);
     dispatcher
       .stop()
