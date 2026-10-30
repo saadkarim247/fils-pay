@@ -86,3 +86,5 @@
 .checkout-form button:hover:not(:disabled) { background: #1e40af; }
 .checkout-error { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; }
 .checkout-help, .checkout-brand-hint { color: #6b7280; }
+.checkout-form input { box-sizing: border-box; width: 100%; min-width: 0; }
+.checkout-form-row > * { flex: 1 1 0; min-width: 0; }
