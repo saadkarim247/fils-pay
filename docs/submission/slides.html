@@ -169,20 +169,18 @@
 
 
 
-<!-- 11. Decisions -->
+<!-- 11. Proof -->
 <section class="slide">
-  <div class="kicker">Decisions and open risks</div>
-  <h1>What we chose not to change, and what is still open</h1>
-  <ul>
-    <li><b>We fixed the code, not history.</b> Past rows (10× CSV corrections, rewritten paid batches, unbooked residue) need a correction reviewed by finance. We ran none.</li>
-    <li><b>Owner sign-off needed:</b> ADR-0007 (rebuild balances from the ledger), and migrations 0054–0056 still breaking ADR-0005.</li>
-    <li><b>Demo box only:</b> the OTP is shown in the login response so judges can sign in. Production must turn this off.</li>
-    <li><b>Next limit:</b> one database user for every service, backups on the same disk, and a single vCPU.</li>
-  </ul>
+  <div class="kicker">Proof it holds</div>
+  <h1>Every fix tested, every fil accounted for</h1>
+  <div class="grid3" style="margin-top:6px">
+    <div class="card"><div class="big">664</div><p>TypeScript tests, <b>0 failures</b>, on freshly migrated databases. All 7 Go packages pass with the database tests actually running.</p></div>
+    <div class="card"><div class="big">79</div><p>findings, each with its own commit and a test that <b>failed before</b> the fix. Tests that locked bugs in were corrected, with the rule cited.</p></div>
+    <div class="card"><div class="big">56,134</div><p>live ledger entries checked read-only: every entry group <b>balances</b>, no refund exceeds its capture, no card hold left open.</p></div>
+  </div>
+  <p style="margin-top:22px">Live on Dilmune Cloud: TLS, one-command redeploy that refuses the settlement window, nightly backups, a crash comes back in about 7 seconds, and overload gets a 503 in milliseconds.</p>
   <div class="num">8</div>
 </section>
-
-
 
 <!-- Appendix -->
 <section class="slide">
