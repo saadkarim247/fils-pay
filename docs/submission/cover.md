@@ -2,22 +2,25 @@
 
 **Team:** Gameover
 
-**Members:** Saad Karim, Maaz Karim
+| Member | Owned |
+|---|---|
+| Saad Karim | Audit and fixes (findings 01–79), FP-300 refunds, AI setup and agent workflow |
+| Maaz Karim | Hosting on Dilmune Cloud, load testing and profiling, live demo and UI evidence, submission documents |
 
 ### Live deployment (Dilmune Cloud)
 
 | What | URL |
 |---|---|
-| Checkout (payment link) | https://165-232-180-63.sslip.io/pay/CHECKOUT_TOKEN_TBD |
+| Checkout (payment link) | https://165-232-180-63.sslip.io/pay/plink_H_dwVXDZOMOVGmmjsqBHVR |
 | Merchant dashboard | https://165-232-180-63.sslip.io/dashboard/login |
 | Admin console | https://admin.165-232-180-63.sslip.io |
 | Public API | https://165-232-180-63.sslip.io/v1 |
 
-Login details for the judges are handed over privately. They are per-deployment secrets and are not in the repository (finding 76).
+Login details for the judges are on the next page. They exist only in this PDF, never in the repository (finding 76).
 
 ### Code
 
 - **Public fork:** https://github.com/saadkarim247/fils-pay
-- **Last commit before the deadline:** `FINAL_COMMIT_TBD`
+- **Last commit before the deadline:** `77d8575` (https://github.com/saadkarim247/fils-pay/commit/77d8575)
 - **Per-finding notes:** `docs/bugs/points/` (one file per finding, one commit per fix)
 - **This document's sources:** `docs/submission/` (rebuild with `node docs/submission/build.mjs`)
