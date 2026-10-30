@@ -12,8 +12,8 @@ export type DeleteWebhookEndpointResult = "deleted" | "not_found";
  * CASCADE) — the delivery log is a durable audit trail that survives the
  * endpoint registration that produced it being removed.
  */
-// FH: docblock says deliveries are kept and there's no ON DELETE CASCADE — then the FK blocks the DELETE and we 500?
-// YA: FK is ON DELETE SET NULL (0029). fine
+// Deliveries and archives keep their rows with endpoint_id NULL via
+// ON DELETE SET NULL (migration 0082; before it the FK blocked this DELETE).
 export async function deleteWebhookEndpoint(
   pool: Pool,
   input: { merchantId: string; id: string },
