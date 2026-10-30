@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { toFils } from "@filspay/money";
 import { requireApiKey } from "../apiKeys/verify.js";
@@ -6,7 +7,7 @@ import { authorizeTransaction, type AuthorizeInput } from "../payments/authorize
 import { captureTransaction } from "../payments/capture.js";
 import { applyCaptureDiscountAdjustment } from "../payments/discountAdjustment.js";
 import { voidTransaction } from "../payments/void.js";
-import { buildTransactionsExportCsv } from "../transactions/exportCsv.js";
+import { streamTransactionsExportCsv } from "../transactions/exportCsv.js";
 import { getTransactionById, listTransactions } from "../transactions/query.js";
 import { listTransactionEvents } from "../transactions/events.js";
 import { BadRequestError, NotFoundError } from "../lib/errors.js";
@@ -158,14 +159,18 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       const q = request.query;
       const status = q.status === undefined ? undefined : Array.isArray(q.status) ? q.status : [q.status];
 
-      const csv = await buildTransactionsExportCsv(app.db, {
-        merchantId: request.merchantAuth!.merchantId,
-        from: q.from ? new Date(q.from) : undefined,
-        to: q.to ? new Date(q.to) : undefined,
-        status,
-      });
+      // Streamed page by page (CHANGELOG 1.8.0): the whole result is never
+      // held in memory on the 512 MB container.
+      const csv = Readable.from(
+        streamTransactionsExportCsv(app.db, {
+          merchantId: request.merchantAuth!.merchantId,
+          from: q.from ? new Date(q.from) : undefined,
+          to: q.to ? new Date(q.to) : undefined,
+          status,
+        }),
+      );
 
-      reply
+      return reply
         .header("content-type", "text/csv; charset=utf-8")
         .header("content-disposition", 'attachment; filename="transactions.csv"')
         .send(csv);
