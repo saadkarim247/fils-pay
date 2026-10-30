@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git blame:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git branch --list:*)",
+      "Bash(git cat-file:*)",
+      "Bash(git merge-base:*)",
+      "Bash(docker compose -f ops/docker-compose.yml ps:*)",
+      "Bash(docker compose -f ops/docker-compose.yml logs:*)",
+      "Bash(docker compose -f ops/docker-compose.yml build:*)",
+      "Bash(docker compose -f ops/docker-compose.yml run --rm:*)",
+      "Bash(docker compose -f ops/docker-compose.yml exec -T postgres psql:*)",
+      "Bash(node:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx tsc:*)",
+      "Bash(tools/freshtest.sh:*)",
+      "Bash(tools/roottest.sh:*)",
+      "Bash(tools/gotest.sh:*)",
+      "Bash(tools/suite.sh:*)",
+      "Bash(perf/checkout/run.sh:*)"
+    ],
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(tools/commit.sh:*)",
+      "Bash(git push:*)",
+      "Bash(ops/deploy.sh:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(perf/checkout/run-live.sh:*)",
+      "Bash(docker compose -f ops/docker-compose.yml up:*)",
+      "Bash(docker compose -f ops/docker-compose.yml down:*)"
+    ],
+    "deny": [
+      "Read(./ops/.env)",
+      "Read(./**/.env)",
+      "Read(~/.ssh/**)",
+      "Bash(cat ops/.env:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(docker compose -f ops/docker-compose.yml down -v:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}

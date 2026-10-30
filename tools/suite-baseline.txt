@@ -1,0 +1,12 @@
+# Known failures for tools/suite.sh: one extended regex per line, matched
+# against "not ok ..." lines. Anything failing that is not listed here is
+# reported as NEW.
+#
+# Empty on purpose: after the fixes in docs/bugs/points/ the suite is expected
+# to pass in full (bug 60's verification: API 540/540, money 40/40, events 4/4,
+# web 15/15, reporting 16/16 on its own database, scripts + db 12/12).
+#
+# History: during the audit this list held 16 entries: 12 refund tests that
+# failed until FP-300 was implemented (bugs 25-35), and 4 reporting tests
+# that only failed because they shared a database with the API tests (now
+# given their own database by suite.sh).
