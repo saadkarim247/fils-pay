@@ -40,6 +40,12 @@
   .title h1 { font-size: 64px; } .title p { font-size: 26px; color: #dbe6ff; } .title .num { color: #c7d6f5; }
   table.lt { font-size: 15.5px; } table.lt th, table.lt td { padding: 6px 8px; }
   table.lt td:first-child { font-weight: 600; }
+  .issue { display: grid; grid-template-columns: 1fr 1.05fr; gap: 34px; flex: 1; min-height: 0; }
+  .issue h2 { font-size: 20px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin: 4px 0 6px; }
+  .issue p, .issue li { font-size: 21px; }
+  pre.diff { font: 17px/1.5 Consolas, monospace; background: #0f1b2d; color: #d7e0ee; padding: 14px 18px; border-radius: 10px; margin: 0 0 14px; white-space: pre-wrap; }
+  pre.diff .add { color: #7ee2a8; } pre.diff .del { color: #ff9b9b; text-decoration: line-through; } pre.diff .ctx { color: #9fb0c8; }
+  .proof { background: #e9f7ef; border-left: 5px solid var(--good); padding: 8px 14px; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -69,72 +75,190 @@
 </section>
 
 
-<!-- 3. Finance memo -->
+<!-- 3. Approach -->
 <section class="slide">
-  <div class="kicker">Leaflet 1 · Finance memo (Fatima H., 20 Sep)</div>
-  <h1>Every money complaint traced to a line of code</h1>
-  <table class="lt">
-    <tr><th>Concern</th><th>Root cause</th><th>Fix</th><th>Proof</th></tr>
-    <tr><td>Scheme total "always a few fils higher"</td><td>File rounded the gross; books truncated; residue never journaled</td><td>Export truncated fils, journal residue (ADR-0002)</td><td>"93.28" → "93.27" · <b>50</b></td></tr>
-    <tr><td>March sweep ran twice, gap doubled</td><td>New random id each run; debited merchants</td><td>Id per merchant and month + lock; ADR legs</td><td>2nd run posts nothing · <b>49</b></td></tr>
-    <tr><td>Delta split children ≠ parent</td><td>Each share rounded alone</td><td>Largest remainder</td><td>1,001 → 334/333/334 · <b>41</b></td></tr>
-    <tr><td>Rebuild balances 135K → 7K (FP-203)</td><td>Console rebuilt from scheme lines, not the ledger</td><td>Rebuild from the ledger (ADR-0007)</td><td>Console = CLI · <b>39</b></td></tr>
-    <tr><td>MDR recalc changes paid batches</td><td><code>status &lt;&gt; 'open'</code> includes paid</td><td><code>status = 'closed'</code></td><td>Paid batch unchanged · <b>16</b></td></tr>
-    <tr><td>Shows 245 bps, charges 225</td><td>Display ignored the effective date</td><td>Same query as capture</td><td>Both 225 · <b>18</b></td></tr>
-    <tr><td>CSV 4.75 BD → 0.475</td><td>Parsed as cents (2 dp), against ADR-0001</td><td><code>parseBhdToFils</code>; file hash unique</td><td>12/16 failing → pass · <b>13, 20</b></td></tr>
-  </table>
+  <div class="kicker">How we worked</div>
+  <h1>Every leaflet line became a test before it became a fix</h1>
+  <div class="grid3" style="margin-top:10px">
+    <div class="card"><h2>1 · Trust the right text</h2><p>The brief and the ADRs are the rules. The repo's own AI instructions, comments and tests told us money was cents and settlement ran on UTC. We treated them as suspects.</p></div>
+    <div class="card"><h2>2 · Prove it fails</h2><p>For each leaflet concern we found the line of code, then wrote a test that fails for exactly that reason, before touching anything.</p></div>
+    <div class="card"><h2>3 · Smallest fix</h2><p>Change as little as possible until the test passes. One commit per bug: 79 in total, and refunds (FP-300) built end to end.</p></div>
+  </div>
+  <p class="muted" style="margin-top:26px">The next slides show the issues with the biggest impact on real money and real accounts.</p>
   <div class="num">3</div>
 </section>
 
-<!-- 4. Group chat + hunches -->
+<!-- issue: OTP -->
 <section class="slide">
-  <div class="kicker">Leaflet 2 · Group chat and unfiled hunches</div>
-  <h1>Every rumour checked, and most were true</h1>
-  <table class="lt">
-    <tr><th>Concern</th><th>Root cause</th><th>Fix</th><th>#</th></tr>
-    <tr><td>"Login works without the OTP"</td><td>Session view dropped <code>authenticated = true</code></td><td>Require it: password-only cookie 200 → 401</td><td>02, 03</td></tr>
-    <tr><td>"Daily close runs at 3am"</td><td>"Today" taken from the UTC date</td><td>Bahrain date; refuse an unfinished day</td><td>17, 40</td></tr>
-    <tr><td>"Test merchants in the real settlement run"</td><td>Recompute counted 0 auths → <code>test_mode = false</code></td><td>Never touch the flag</td><td>09</td></tr>
-    <tr><td>"A cancelled B's payment link"</td><td>Cancel matched the link id only</td><td>Scope by authenticated merchant</td><td>11</td></tr>
-    <tr><td>"Lifetime estimate drifts"</td><td>Summed in float32</td><td><code>BIGINT</code> fils</td><td>57</td></tr>
-    <tr><td>"Admin actions lack role checks"</td><td>Support creates credits; view-as-merchant writes</td><td>Roles per route; impersonation read-only</td><td>07, 04, 46</td></tr>
-    <tr><td>"Key rotation doesn't do what you'd expect"</td><td>The old key was never revoked</td><td>Rotation revokes the old key</td><td>05</td></tr>
-    <tr><td>"OTP changed: still safe?"</td><td><code>Math.random</code>; guess limit could be raced</td><td><code>node:crypto</code>; atomic budget</td><td>44, 53</td></tr>
-    <tr><td>"Reporting query slow" · "large export"</td><td>Counted N times per capture · whole history in memory</td><td>One correct query · streamed CSV</td><td>42, 55</td></tr>
-  </table>
+  <div class="kicker">Group chat: "login works without entering the OTP"</div>
+  <h1>A password alone opened any merchant's account</h1>
+  <div class="issue">
+    <div>
+      <h2>What was wrong</h2><p>After the password step the server issues a "pending" cookie. That cookie already worked as a full session, so the OTP step was decorative.</p>
+      <h2>Why</h2><p>Sessions were looked up through a database view that dropped the <code>authenticated = true</code> check. A code comment claimed the opposite.</p>
+    </div>
+    <div>
+      <h2>What we changed</h2>
+      <pre class="diff"><span class="ctx">SELECT … FROM live_sessions s
+WHERE s.token_hash = $1</span>
+<span class="add">  AND s.authenticated = true</span></pre>
+      <p class="proof">Password-only cookie: <b>200 → 401</b>. After OTP: 200.</p>
+    </div>
+  </div>
   <div class="num">4</div>
 </section>
 
-<!-- 5. Tickets + incidents -->
+<!-- issue: link twice -->
 <section class="slide">
-  <div class="kicker">Leaflet 3 · Support tickets and incidents</div>
-  <h1>Each ticket's real cause, not the postmortem's</h1>
-  <table class="lt">
-    <tr><th>Ticket</th><th>Root cause</th><th>Fix</th><th>Proof</th></tr>
-    <tr><td><b>Incident 05-14</b>: link charged twice</td><td>Stale reservation re-claimable; 0-row finalize said "paid"</td><td>Reservation owner id; mark paid before capture</td><td>2 captures → 1 + 409 · <b>23</b></td></tr>
-    <tr><td><b>Incident 08-21</b>: duplicate payout notices</td><td>No unique key; one disbursement per webhook <i>delivery</i></td><td>One event and one disbursement per paid batch</td><td>4 events → 1 · <b>24</b></td></tr>
-    <tr><td><b>FP-209</b>: two refunds both succeed</td><td>No lock; absolute <code>refunded_fils</code> write</td><td>One row-locked transaction + DB <code>CHECK</code></td><td>5 paid → ≤ 3 · <b>28</b></td></tr>
-    <tr><td><b>FP-187</b>: link paid after expiry</td><td>Trusted the buyer's <code>submittedAt</code></td><td>Server clock</td><td>Expired → 410 · <b>38</b></td></tr>
-    <tr><td><b>FP-240</b>: signer and sender disagree</td><td>Signed sorted JSON, sent other bytes; callbacks fail open</td><td>Sign the bytes sent; signature required</td><td>Receivers verify · <b>36, 37, 12</b></td></tr>
-    <tr><td><b>FP-201</b>: duplicate callback notes</td><td>No unique key on the callback id</td><td>Unique index (0078)</td><td>2 deliveries → 1 note · <b>43</b></td></tr>
-  </table>
-  <p class="muted" style="margin-top:10px">The 1.6.0 changelog said 05-14 was fixed by de-duplicating callbacks. Callbacks only write notes, so that was never the cause.</p>
+  <div class="kicker">Incident 14 May: "payment link charged twice"</div>
+  <h1>One payment link could take money from two buyers</h1>
+  <div class="issue">
+    <div>
+      <h2>What was wrong</h2><p>If a checkout was slow, a second buyer could re-claim the same link. Both cards were captured and both buyers were told "paid".</p>
+      <h2>Why</h2><p>The reservation didn't record who held it, and a finalize that matched no rows still answered "paid". The changelog blamed duplicate callbacks, which were never the cause.</p>
+    </div>
+    <div>
+      <h2>What we changed</h2>
+      <pre class="diff"><span class="ctx">UPDATE payment_links SET status = 'paid'
+WHERE id = $1 AND status = 'reserved'</span>
+<span class="add">  AND reservation_id = $3   -- only the holder</span></pre>
+      <p>The link is marked paid <i>before</i> the card is captured. The losing buyer's authorization is voided and they get a 409.</p>
+      <p class="proof">Two buyers at once: <b>2 captures → 1</b>.</p>
+    </div>
+  </div>
   <div class="num">5</div>
 </section>
 
-<!-- 6. FP-300 -->
+<!-- issue: duplicate payouts -->
 <section class="slide">
-  <div class="kicker">Leaflet 4 · FP-300: finish the missing feature</div>
-  <h1>Refunds: "looks easy. it isn't. it touches everything."</h1>
-  <table class="lt">
-    <tr><th>Done when…</th><th>What we had to fix</th><th>#</th></tr>
-    <tr><td>Works end to end through the API</td><td>Route returned 501, drawer unwired; B could refund A's sale; a refund with no reason lost the record</td><td>35, 26, 25</td></tr>
-    <tr><td>Ledger right to the fils; fees and payouts right</td><td>Refund above the captured amount; concurrent refunds; fee reversal 22 → 21; settlement paid out refunded money</td><td>27, 28, 29, 30</td></tr>
-    <tr><td>Shop gets the right webhook</td><td><code>refund.succeeded</code> never delivered</td><td>32</td></tr>
-    <tr><td>Correct in timeline, reports and reconciliation</td><td>Refunded page crashed; reconciliation, summary view and analytics all ignored refunds</td><td>34, 31, 33, 58</td></tr>
-    <tr><td>Live on Dilmune Cloud</td><td>Deployed; full and partial refund shown on the next slide</td><td>✓</td></tr>
-  </table>
+  <div class="kicker">Incident 21 Aug: "duplicate payout on the way"</div>
+  <h1>Payouts were recorded once per webhook, not once per payout</h1>
+  <div class="issue">
+    <div>
+      <h2>What was wrong</h2><p>Merchants got the same payout announced twice, and the payout instruction (a disbursement row) was written again for every webhook delivery and every replay. Merchants with no webhook got none.</p>
+      <h2>Why</h2><p>"Check, then insert" with no lock, and the record written by the webhook sender instead of the payout step.</p>
+    </div>
+    <div>
+      <h2>What we changed</h2>
+      <pre class="diff"><span class="del">webhook delivered  → write disbursement</span>
+<span class="add">PayoutBatch (row lock held)
+  → mark batch paid
+  → write ONE disbursement
+  → enqueue ONE settlement.paid</span></pre>
+      <p class="proof">4 parallel runs: <b>4 events → 1</b>, <b>2 disbursements → 1</b>.</p>
+    </div>
+  </div>
   <div class="num">6</div>
+</section>
+
+<!-- issue: refunds -->
+<section class="slide">
+  <div class="kicker">FP-209: "two concurrent refunds both succeed" · hunch: "refund more than was charged?"</div>
+  <h1>Refunds could pay out money that didn't exist</h1>
+  <div class="issue">
+    <div>
+      <h2>What was wrong</h2>
+      <ul><li>Two refunds sent together both paid.</li><li>A refund could exceed the captured amount.</li><li>Merchant B could refund merchant A's sale.</li></ul>
+      <h2>Why</h2><p>The refund read the row without a lock and then overwrote the total. The ceiling used the <i>authorized</i> amount, and the lookup ignored who was asking.</p>
+    </div>
+    <div>
+      <h2>What we changed</h2>
+      <pre class="diff"><span class="ctx">SELECT … FROM transactions
+WHERE id = $1 AND merchant_id = $2</span>
+<span class="add">FOR UPDATE</span>
+<span class="del">SET refunded_fils = $2</span>
+<span class="add">SET refunded_fils = refunded_fils + $2</span>
+<span class="add">CHECK (refunded_fils &lt;= captured_fils)</span></pre>
+      <p class="proof">5 refunds at once: <b>5 paid → at most 3</b>. Someone else's sale: <b>404</b>.</p>
+    </div>
+  </div>
+  <div class="num">7</div>
+</section>
+
+<!-- issue: CSV x10 -->
+<section class="slide">
+  <div class="kicker">Finance memo: "4.75 BD came out as 0.475"</div>
+  <h1>Balance corrections were posted at a tenth of their value</h1>
+  <div class="issue">
+    <div>
+      <h2>What was wrong</h2><p>Finance's CSV of manual corrections landed in the ledger 10× too small: a 4,141.90 BD sheet posted 414.190 BD. A third decimal was silently dropped.</p>
+      <h2>Why</h2><p>The parser assumed <b>cents</b> (2 decimals). The Bahraini dinar has 1,000 fils, and the ADR says so. The repo's AI rules said "cents".</p>
+    </div>
+    <div>
+      <h2>What we changed</h2>
+      <pre class="diff"><span class="del">return toFils(parseDecimalMinor(raw))  // 2 dp</span>
+<span class="add">return parseBhdToFils(raw)             // 3 dp</span></pre>
+      <p>We also added a content hash, so the same file can't be applied twice (that had happened 22 s apart).</p>
+      <p class="proof">"4.75" → <b>4,750 fils</b> (was 475).</p>
+    </div>
+  </div>
+  <div class="num">8</div>
+</section>
+
+<!-- issue: scheme -->
+<section class="slide">
+  <div class="kicker">Finance memo: "scheme total is always a few fils higher, never lower"</div>
+  <h1>We told the card scheme more than we booked, every batch</h1>
+  <div class="issue">
+    <div>
+      <h2>What was wrong</h2><p>Each batch's scheme file came out a few fils over our ledger, always in the same direction: 1.230 BD over on one Delta batch.</p>
+      <h2>Why</h2><p>The books truncate each line to 10 fils, but the file sent the full amount rounded. The leftover "residue" was never booked. The ADR claimed it was.</p>
+    </div>
+    <div>
+      <h2>What we changed</h2>
+      <pre class="diff"><span class="del">amount = SchemeAmountBD(gross)        // rounds up</span>
+<span class="add">amount = format(truncated)            // what we booked
+if residue := gross - truncated; residue &gt; 0 {
+    post clearing / residue ledger pair
+}</span></pre>
+      <p class="proof">Line "93.28" → <b>"93.27"</b>; residue booked to the fil.</p>
+    </div>
+  </div>
+  <div class="num">9</div>
+</section>
+
+<!-- issue: 3am + test merchants -->
+<section class="slide">
+  <div class="kicker">Group chat: "daily close runs at 3am" · "test merchants in the real settlement run"</div>
+  <h1>Settlement ran at the wrong time, and paid fake shops</h1>
+  <div class="issue">
+    <div>
+      <h2>Closing at 03:00, not midnight</h2>
+      <p>"Today" was taken from the <b>UTC</b> date, so Bahrain's day closed three hours late.</p>
+      <pre class="diff"><span class="del">BusinessDayWindow(now)</span>
+<span class="add">BusinessDayWindow(BusinessDateOf(now)) // Bahrain</span></pre>
+      <p>Closing a day that hasn't ended is now refused, because it used to silently drop the rest of that day's sales.</p>
+    </div>
+    <div>
+      <h2>Test merchants switched live</h2>
+      <p>The admin "recompute statuses" button counted open authorizations after filtering them out, always got 0, and then turned <code>test_mode</code> off. Sandbox sales went into real payouts.</p>
+      <pre class="diff"><span class="del">if openAuthorizations == 0 → test_mode = false</span>
+<span class="add">(removed: recompute never touches merchant flags)</span></pre>
+    </div>
+  </div>
+  <div class="num">10</div>
+</section>
+
+<!-- FP-300 -->
+<section class="slide">
+  <div class="kicker">FP-300: "looks easy. it isn't. it touches everything."</div>
+  <h1>Refunds, built end to end</h1>
+  <div class="grid2">
+    <div>
+      <p>The route answered <b>501</b> and the dashboard drawer wasn't wired. Turning it on exposed eleven more problems along the money path:</p>
+      <ul>
+        <li><b>Ledger:</b> fee given back rounded per part, so 22 fils of fee came back as 21.</li>
+        <li><b>Payouts:</b> settlement paid merchants for money already refunded.</li>
+        <li><b>Webhook:</b> <code>refund.succeeded</code> was never sent.</li>
+        <li><b>Screens:</b> the refunded page crashed, and reconciliation and analytics ignored refunds.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>"Done when" from the brief</h2>
+      <p>✓ Works end to end through the API<br>✓ Ledger right down to the fils<br>✓ Fees and payouts right<br>✓ Shop gets the right webhook<br>✓ Timeline, reports, reconciliation<br>✓ Live on Dilmune Cloud</p>
+    </div>
+  </div>
+  <div class="num">11</div>
 </section>
 
 <!-- 7. Live demo -->
@@ -147,7 +271,7 @@
   </div>
   <div class="grid2" style="flex:none;margin-top:8px"><p><b>Full:</b> 25.000 BD → <code>refunded</code>, timeline −25.000</p><p><b>Partial:</b> 15.250 of 40.000 BD → <code>partially_refunded</code>, 24.750 left</p></div>
   <p class="muted" style="margin-top:4px">Dashboard drawer → <code>POST /v1/merchants/:id/refunds</code> → ledger reverses amount and fee to the fil → <code>refund.succeeded</code> webhook → nightly batch nets the refund out of the payout.</p>
-  <div class="num">7</div>
+  <div class="num">12</div>
 </section>
 
 
@@ -173,7 +297,7 @@
       <div class="imgbox" style="margin-top:10px; height:250px"><img src="../perf/2026-10-30-batch-n-plus-1.png" alt="N+1 before/after"></div>
     </div>
   </div>
-  <div class="num">8</div>
+  <div class="num">13</div>
 </section>
 
 <!-- 9. Under load -->
@@ -192,7 +316,7 @@
     </div>
     <div class="imgbox"><img src="../perf/2026-10-30-live-capacity.png" alt="Live capacity before and after"></div>
   </div>
-  <div class="num">9</div>
+  <div class="num">14</div>
 </section>
 
 
@@ -205,7 +329,7 @@
     <div class="card"><h2>It resisted the trap</h2><p>The repo's own CLAUDE.md told AI tools that money was cents, settlement ran on UTC and tests must never change. We treated it as part of the code under audit; each of its rules pointed to a real bug.</p></div>
     <div class="card"><h2>It was wrong, and we caught it</h2><p><code>docker stats</code> said Postgres used about 5% CPU, and the AI took that at face value. The kernel's cgroup counters showed it throttled 90–95% of the time. That led us to the real cause: checkout scanned the whole ledger (finding 75).</p></div>
   </div>
-  <div class="num">10</div>
+  <div class="num">15</div>
 </section>
 
 
@@ -220,7 +344,7 @@
     <li><b>Demo sandbox shows the OTP</b> in the login response so judges can log in. Production must turn this off.</li>
     <li><b>Still open:</b> one database superuser for every service; backups stay on the same box; about 60k load-test links in the live database.</li>
   </ul>
-  <div class="num">11</div>
+  <div class="num">16</div>
 </section>
 
 
