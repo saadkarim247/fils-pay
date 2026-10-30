@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { insertAdminAuditLog } from "../adminAudit/log.js";
 import { withTransaction } from "../db/withTransaction.js";
 import { ConflictError, NotFoundError } from "../lib/errors.js";
-import { insertReplayDeliveryRow } from "./replay.js";
+import { insertReplayDeliveryRows } from "./replay.js";
 
 /** Same batch-cap idea as the dispatcher's own pass caps: a bounded unit
  *  of work per call, so one operator click can never open a transaction that
@@ -27,10 +27,10 @@ export interface BatchReplayResult {
 
 /**
  * "Replay a batch" = every delivery for one endpoint, in one date range,
- * with one of the requested statuses — replayed by calling the *same*
- * single-delivery replay logic in a loop. Deliberately not a second
- * delivery/retry engine: `insertReplayDeliveryRow` is the only definition of
- * what a replay is, here as in the merchant-facing route.
+ * with one of the requested statuses — replayed through the *same* replay
+ * logic as a single delivery, in one statement. Deliberately not a second
+ * delivery/retry engine: `insertReplayDeliveryRows` is the only definition
+ * of what a replay is, here as in the merchant-facing route.
  *
  * Candidate selection, every replay insert, and the audit row all happen
  * inside **one** transaction. That makes an audit-write failure roll back the
@@ -84,17 +84,19 @@ export async function replayWebhookDeliveriesBatch(
       [input.endpointId, input.statuses, input.from, input.to, MAX_BATCH_SIZE],
     );
 
-    const replayedDeliveryIds: string[] = [];
-    for (const row of candidates.rows) {
-      const inserted = await insertReplayDeliveryRow(client, {
+    // One statement for the whole batch (one INSERT per delivery was an N+1);
+    // what a replay is stays defined once, in insertReplayDeliveryRows.
+    const inserted = await insertReplayDeliveryRows(
+      client,
+      candidates.rows.map((row) => ({
         id: row.id,
         endpointId: row.endpoint_id,
         outboxEventId: row.outbox_event_id,
         eventType: row.event_type,
         payload: row.payload,
-      });
-      replayedDeliveryIds.push(inserted.deliveryId);
-    }
+      })),
+    );
+    const replayedDeliveryIds = inserted.map((r) => r.deliveryId);
 
     await insertAdminAuditLog(client, {
       adminUserId: input.adminUserId,

@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import { insertAdminAuditLog } from "../adminAudit/log.js";
 import { withTransaction } from "../db/withTransaction.js";
 import { ConflictError, NotFoundError } from "../lib/errors.js";
-import { insertReplayDeliveryRow } from "./replay.js";
+import { insertReplayDeliveryRows } from "./replay.js";
 
 export interface ArchivedDeliveryEntry {
   deliveryId: string;
@@ -176,16 +176,18 @@ export async function replayWebhookDeliveryArchive(
     // either queues the whole archive or nothing.
     let replayedCount = 0;
     for await (const entries of readArchiveEntries(client, input.archiveId, archiveRow.archive_payload)) {
-      for (const entry of entries) {
-        await insertReplayDeliveryRow(client, {
+      // One statement per page of 1000 (was one per delivery).
+      const inserted = await insertReplayDeliveryRows(
+        client,
+        entries.map((entry) => ({
           id: entry.deliveryId,
           endpointId: input.targetEndpointId,
           outboxEventId: entry.outboxEventId,
           eventType: entry.eventType,
           payload: entry.payload,
-        });
-        replayedCount++;
-      }
+        })),
+      );
+      replayedCount += inserted.length;
     }
 
     await insertAdminAuditLog(client, {

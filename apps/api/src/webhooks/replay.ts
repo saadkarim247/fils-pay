@@ -21,56 +21,64 @@ export interface OriginalDelivery {
  * both the merchant-facing single-delivery replay route and the admin
  * batch-replay function — so the two can never mean different things.
  *
- * Re-signs with a fresh timestamp and a fresh delivery_event_id rather than
- * resending the original bytes verbatim: this platform's signature scheme
- * binds a `t=` timestamp specifically so a receiver can enforce freshness,
- * and a stale replay would near-certainly fail that check. A replay is also,
- * from a receiver's dedupe perspective, legitimately a new delivery attempt
- * of the same underlying event — reusing the original delivery_event_id
- * would make a receiver that already processed the original silently swallow
- * the replay too. The stored envelope's own `id` field is updated to match
- * (data/type/createdAt carried over unchanged), so a receiver deduping from
- * either the Webhook-Delivery-Id header or the parsed body gets a consistent
- * answer.
+ * A replay is the same event to the receiver: it keeps the original
+ * Webhook-Delivery-Id (= the envelope id), which receivers dedupe on
+ * (ARCHITECTURE, CHANGELOG 1.9.1, 0022; bug 37). The dispatcher still signs
+ * each attempt with a fresh timestamp, so freshness checks pass. A payload
+ * without an id (never written by this platform) falls back to a new one.
  *
  * The original row (payload + signature) is never mutated — forensic value
  * is preserved there, not by resending its exact bytes.
  *
  * Takes a PoolClient so the caller controls the transaction: the batch path
  * needs every insert and its audit row to commit or roll back together.
+ * Writes every replay in ONE statement (one INSERT per delivery was an N+1
+ * for batch and archive replays); results come back in input order.
  */
+export async function insertReplayDeliveryRows(
+  client: PoolClient,
+  originals: readonly OriginalDelivery[],
+): Promise<ReplayResult[]> {
+  if (originals.length === 0) return [];
+  const rowIds = originals.map(() => randomUUID());
+  const eventIds: string[] = [];
+  const payloads: string[] = [];
+  for (const original of originals) {
+    const originalId = typeof original.payload.id === "string" ? original.payload.id : undefined;
+    const deliveryEventId = originalId ?? randomUUID();
+    eventIds.push(deliveryEventId);
+    payloads.push(JSON.stringify({ ...original.payload, id: deliveryEventId }));
+  }
+
+  const insertResult = await client.query(
+    `INSERT INTO webhook_deliveries
+        (id, endpoint_id, outbox_event_id, event_type, delivery_event_id, payload, status, next_attempt_at, replay_of_delivery_id)
+     SELECT r.id, r.endpoint_id, r.outbox_event_id, r.event_type, r.delivery_event_id, r.payload::jsonb, 'pending', now(), r.original_id
+       FROM unnest($1::uuid[], $2::uuid[], $3::bigint[], $4::text[], $5::uuid[], $6::text[], $7::uuid[])
+            AS r(id, endpoint_id, outbox_event_id, event_type, delivery_event_id, payload, original_id)`,
+    [
+      rowIds,
+      originals.map((o) => o.endpointId),
+      originals.map((o) => o.outboxEventId),
+      originals.map((o) => o.eventType),
+      eventIds,
+      payloads,
+      originals.map((o) => o.id),
+    ],
+  );
+  if (insertResult.rowCount !== originals.length) {
+    throw new Error(`insertReplayDeliveryRows: inserted ${insertResult.rowCount} of ${originals.length} replays`);
+  }
+  return rowIds.map((id) => ({ deliveryId: id, status: "pending" }));
+}
+
+/** One replay: the same definition as the batch path, with one row. */
 export async function insertReplayDeliveryRow(
   client: PoolClient,
   original: OriginalDelivery,
 ): Promise<ReplayResult> {
-  // A replay is the same event to the receiver: it keeps the original
-  // Webhook-Delivery-Id (= the envelope id), which receivers dedupe on
-  // (ARCHITECTURE, CHANGELOG 1.9.1, 0022). The dispatcher still signs each
-  // attempt with a fresh timestamp. A payload without an id (never written by
-  // this platform) falls back to a new one.
-  const originalId = typeof original.payload.id === "string" ? original.payload.id : undefined;
-  const newDeliveryEventId = originalId ?? randomUUID();
-  const replayPayload = { ...original.payload, id: newDeliveryEventId };
-
-  const insertResult = await client.query<{ id: string; status: string }>(
-    `INSERT INTO webhook_deliveries
-        (endpoint_id, outbox_event_id, event_type, delivery_event_id, payload, status, next_attempt_at, replay_of_delivery_id)
-     VALUES ($1, $2, $3, $4, $5, 'pending', now(), $6)
-     RETURNING id, status`,
-    [
-      original.endpointId,
-      original.outboxEventId,
-      original.eventType,
-      newDeliveryEventId,
-      JSON.stringify(replayPayload),
-      original.id,
-    ],
-  );
-  const row = insertResult.rows[0];
-  if (!row) {
-    throw new Error("insertReplayDeliveryRow: insert into webhook_deliveries returned no row");
-  }
-  return { deliveryId: row.id, status: row.status };
+  const [result] = await insertReplayDeliveryRows(client, [original]);
+  return result!;
 }
 
 interface OriginalDeliveryRow {
