@@ -36,6 +36,9 @@ echo "== building and starting"
   cd ~/filspay
   test -f ops/.env || { echo "ops/.env missing: run ops/init-env.sh on the server first"; exit 1; }
   docker compose -p filspay -f ops/docker-compose.yml up -d --build --remove-orphans
+  # up --build skips profile services: keep the seed image (seed and
+  # seed:reset-passwords) on the code just shipped.
+  docker compose -p filspay -f ops/docker-compose.yml --profile seed build seed >/dev/null
   docker builder prune -f >/dev/null
   docker compose -p filspay -f ops/docker-compose.yml ps
   df -h / | tail -1; free -h | head -2

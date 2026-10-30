@@ -218,9 +218,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # TLS handshakes are its cost: at 0.15 it was throttled 89-97 % of the
+    # time from 100 checkouts/s offered, and the API's fast 503s queued
+    # behind it until clients timed out.
     deploy:
       resources:
-        limits: { cpus: "0.15", memory: 96M }
+        limits: { cpus: "0.4", memory: 96M }
     logging: *logging
 
 volumes:

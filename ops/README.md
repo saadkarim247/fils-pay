@@ -80,7 +80,7 @@ proxy `/v1` to the API on `localhost:3000`.
 
 | Property | How |
 |---|---|
-| Fits the box: 1 vCPU / 2 GB, API ≤ 0.5 vCPU / 512 MB | CPU ceilings on the one shared vCPU: api 0.5, postgres 0.5, proxy 0.15, settlement 0.1, reporting 0.1, backup 0.1. They are caps, not reservations, so they sum past 1; Postgres got 0.5 after the load test showed it pinned at 0.3 while the box was half idle. Memory: 512 / 640 / 96 / 128 / 256 / 64 MB. Node heaps capped below their container limits. |
+| Fits the box: 1 vCPU / 2 GB, API ≤ 0.5 vCPU / 512 MB | CPU ceilings on the one shared vCPU: api 0.5, postgres 0.5, proxy 0.4, settlement 0.1, reporting 0.1, backup 0.1. They are caps, not reservations, so they sum past 1; Postgres got 0.5 after the load test showed it pinned at 0.3 while the box was half idle, and the proxy 0.4 after TLS handshakes pinned it at 0.15 from 100 checkouts/s. Memory: 512 / 640 / 96 / 128 / 256 / 64 MB. Node heaps capped below their container limits. |
 | Restarts itself | `restart: unless-stopped` on every long-running service. Measured: a hard-killed API process is back and healthy in ~7 s. |
 | Health | API healthcheck on `/readyz`; Postgres on `pg_isready`. Services start only after Postgres is healthy and migrations succeeded. |
 | Not exposed | Postgres is not published. The API binds to `127.0.0.1` until the TLS proxy fronts it. Settlement's internal API (:8091) is reachable only on the compose network. |
