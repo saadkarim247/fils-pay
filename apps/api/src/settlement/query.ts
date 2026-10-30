@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { applyRateFils, toFils } from "@filspay/money";
+import { discountedFeeFils } from "../fees/discountedFee.js";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -302,8 +303,8 @@ export async function getReconciliationReport(
     ),
     // Each unbatched capture event with the fee capture actually charged for
     // it (recorded on the event), never a re-estimate.
-    pool.query<{ amount_fils: string | number; fee_fils: string | number | null }>(
-      `SELECT te.amount_fils, te.metadata->>'feeFils' AS fee_fils
+    pool.query<{ amount_fils: string | number; fee_fils: string | number | null; mdr_bps: string | null }>(
+      `SELECT te.amount_fils, te.metadata->>'feeFils' AS fee_fils, te.metadata->>'mdrBps' AS mdr_bps
          FROM transaction_events te
          JOIN transactions t ON t.id = te.transaction_id
         WHERE t.merchant_id = $1 AND te.event_type IN ('captured', 'partially_captured')
@@ -334,8 +335,14 @@ export async function getReconciliationReport(
     const amountFils = Number(row.amount_fils);
     const feeCharged = toFils(Number(row.fee_fils ?? 0));
     // The negotiated-discount rebate, computed exactly as
-    // applyCaptureDiscountAdjustment posts it.
-    const rebate = discountBps > 0 ? applyRateFils(feeCharged, discountBps) : 0;
+    // applyCaptureDiscountAdjustment posts it (fee down to MDR on the
+    // discounted amount; the old rebate rule for events without mdrBps).
+    const rebate =
+      discountBps === 0
+        ? 0
+        : row.mdr_bps === null
+          ? applyRateFils(feeCharged, discountBps)
+          : feeCharged - discountedFeeFils(toFils(amountFils), Number(row.mdr_bps), discountBps);
     pendingUnbatchedFils += amountFils - feeCharged + rebate;
   }
   pendingUnbatchedFils -= Number(pendingRefundsResult.rows[0]?.net ?? 0);

@@ -1,16 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { applyRateFils, toFils } from "@filspay/money";
+import { applyRateFils, subtractFils, toFils } from "@filspay/money";
 import { withTransaction } from "../db/withTransaction.js";
+import { discountedFeeFils } from "../fees/discountedFee.js";
 
 /**
  * Applies a merchant's negotiated processing discount against the MDR fee
- * capture.ts already charged, per the merchant's pricing agreement: the
- * discount applies to our processing fee, after it's calculated — see the
- * partner-pricing addendum. capture.ts's own response doesn't carry the
- * fee it just charged, so this reads it back from the transaction_events
- * row capture.ts already wrote (its `metadata.feeFils`), then reverses the
- * merchant's share via a same-day ledger adjustment.
+ * capture.ts already charged. ARCHITECTURE: "Discounts reduce the amount
+ * the MDR is charged on", so the fee kept must be MDR(amount - discount),
+ * exactly what settlement's ComputeSettlementFee charges. (The "partner-
+ * pricing addendum" the old comment cited is not in the repo.) This reads
+ * the capture's amount, fee and applied rate back from its
+ * transaction_events row, then rebates the difference via a same-day ledger
+ * adjustment.
  *
  * A merchant with negotiated_discount_bps = 0 (the default for anyone
  * without a negotiated rate) is a no-op: this
@@ -47,8 +49,8 @@ export async function applyCaptureDiscountAdjustment(
     const counts = countRow.rows[0];
     if (counts && Number(counts.adjustments) >= Number(counts.capture_events)) return;
 
-    const eventRow = await client.query<{ metadata: { feeFils?: number } }>(
-      `SELECT metadata FROM transaction_events
+    const eventRow = await client.query<{ amount_fils: string | number; metadata: { feeFils?: number; mdrBps?: number } }>(
+      `SELECT amount_fils, metadata FROM transaction_events
         WHERE transaction_id = $1 AND event_type IN ('captured', 'partially_captured')
         ORDER BY occurred_at DESC, id DESC LIMIT 1`,
       [input.transactionId],
@@ -56,7 +58,15 @@ export async function applyCaptureDiscountAdjustment(
     const feeBeforeDiscount = toFils(eventRow.rows[0]?.metadata?.feeFils ?? 0);
     if (feeBeforeDiscount <= 0) return;
 
-    const discountFils = applyRateFils(feeBeforeDiscount, discountBps);
+    // The rebate brings the fee kept down to exactly what settlement charges:
+    // MDR on the discounted amount (ARCHITECTURE; Go ComputeSettlementFee).
+    // Rebating discount(fee) instead rounded differently, about a fil per
+    // capture. Events captured before mdrBps was recorded keep the old rule.
+    const mdrBps = eventRow.rows[0]?.metadata?.mdrBps;
+    const discountFils =
+      mdrBps === undefined
+        ? applyRateFils(feeBeforeDiscount, discountBps)
+        : subtractFils(feeBeforeDiscount, discountedFeeFils(toFils(Number(eventRow.rows[0]!.amount_fils)), mdrBps, discountBps));
     if (discountFils <= 0) return;
 
     const entryGroupId = randomUUID();
