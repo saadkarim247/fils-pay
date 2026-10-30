@@ -1,6 +1,7 @@
 package settlement
 
 import (
+	"log"
 	"context"
 	"errors"
 	"fmt"
@@ -484,6 +485,12 @@ func RunDailyBatch(ctx context.Context, db *pgxpool.Pool, businessDate time.Time
 		var alreadyPaid bool
 		if isSplitParent {
 			splitResult, err := splits.PayoutSplitBatch(ctx, db, closeResult.BatchID)
+			if errors.Is(err, splits.ErrSplitWeightsInvalid) {
+				// Leave this marketplace's batch closed and unpaid for someone to
+				// fix its split setup; don't hold up every other merchant.
+				log.Printf("settlement: RunDailyBatch: not paying batch %s: %v", closeResult.BatchID, err)
+				continue
+			}
 			if err != nil {
 				return report, fmt.Errorf("settlement: RunDailyBatch: PayoutSplitBatch(%s): %w", closeResult.BatchID, err)
 			}
