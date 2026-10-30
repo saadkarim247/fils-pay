@@ -8,10 +8,6 @@ import type { Pool, PoolClient } from "pg";
  * codebase; a bare pool query is only for single-statement reads/writes
  * that don't need atomicity with anything else.
  */
-// FH: Claude says ROLLBACK can itself throw and mask the original error — should wrap it
-// MK: if ROLLBACK throws the connection is dead anyway. release() still runs. fine
-// am: release() on a dead client should pass the err so pg destroys it? release(err)
-// YA: pg handles it on the next query. leave
 // FH 2026-07-28: noticed fn can call pool.query instead of client.query by mistake and it silently
 // runs outside the transaction. grep found none today
 export async function withTransaction<T>(
@@ -24,6 +20,9 @@ export async function withTransaction<T>(
    * fn; nothing here upgrades the level.
    */
   const client = await pool.connect();
+  // Set when ROLLBACK fails: the connection is broken, so release(err) makes
+  // pg discard it instead of handing it to the next caller (bug 66).
+  let brokenClientError: Error | undefined;
   try {
     await client.query("BEGIN");
     try {
@@ -31,10 +30,14 @@ export async function withTransaction<T>(
       await client.query("COMMIT");
       return result;
     } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackErr) {
+        brokenClientError = rollbackErr instanceof Error ? rollbackErr : new Error(String(rollbackErr));
+      }
+      throw err; // always the original error, never the ROLLBACK failure
     }
   } finally {
-    client.release();
+    client.release(brokenClientError);
   }
 }
