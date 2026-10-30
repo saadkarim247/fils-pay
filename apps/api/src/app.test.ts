@@ -271,13 +271,16 @@ test("KYC upload accepts a real tiny PDF and moves onboarding_status to under_re
   assert.equal(meRes.json().merchant.onboardingStatus, "under_review");
 });
 
-test("KYC upload rejects a commercial_registration submitted as a non-PDF filename", async () => {
+// Corrected (bug 47): the rule is judged by the bytes (ARCHITECTURE), not the
+// name. This used to send real PDF bytes named .docx; it now sends a photo
+// (JPEG bytes) named .pdf, which is what the rule exists to stop.
+test("KYC upload rejects a commercial_registration that is not a PDF, even when named .pdf", async () => {
   const { merchantId, cookie } = await signupLoginAndVerify("kycnonpdf");
 
-  const pdfBuffer = Buffer.from("%PDF-1.4\n%mock minimal pdf for test\n%%EOF");
+  const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
   const { body, contentType } = buildMultipart(
     { documentType: "commercial_registration" },
-    { fieldName: "file", filename: "registration.docx", contentType: "application/pdf", data: pdfBuffer },
+    { fieldName: "file", filename: "registration.pdf", contentType: "application/pdf", data: jpegBuffer },
   );
 
   const res = await app.inject({

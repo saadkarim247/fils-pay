@@ -20,6 +20,9 @@ export interface GeneratedThumbnail {
  * console's `<img>` tag never needs to branch on thumbnail mime type the
  * way the original-file endpoint does.
  */
+/** 50 MP: comfortably above any phone or scanner photo, far below a bomb. */
+const KYC_MAX_INPUT_PIXELS = 50_000_000;
+
 export async function generateKycThumbnail(
   buffer: Buffer,
   detectedType: DetectedFileType,
@@ -27,9 +30,9 @@ export async function generateKycThumbnail(
   if (detectedType !== "jpeg" && detectedType !== "png") {
     return null;
   }
-  // YA: the 8 MiB upload cap protects us here
-  // FH: sharp's default pixel limit is ~268MP, a tiny png can decode huge. copilot suggests limitInputPixels
-  const resized = await sharp(buffer)
+  // A small file can declare an enormous canvas (decompression bomb); the
+  // 8 MiB upload cap doesn't bound the decoded size, so cap the pixels.
+  const resized = await sharp(buffer, { limitInputPixels: KYC_MAX_INPUT_PIXELS })
     .resize(THUMBNAIL_MAX_DIMENSION_PX, THUMBNAIL_MAX_DIMENSION_PX, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 70 })
     .toBuffer();
