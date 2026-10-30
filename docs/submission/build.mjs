@@ -16,21 +16,22 @@ mkdirSync(out, { recursive: true });
 // every file nests under its numbered section.
 const SECTIONS = [
   { file: "cover.md" },
+  // Judges' logins: gitignored, so they reach the PDF but never the repo.
+  { file: "credentials.local.md", optional: true },
   { file: "summary.md" },
-  { file: "top-findings.md", minLevel: 3 },
   { file: "architecture.md" },
   { file: "capacity.md" },
   { file: "findings.md" },
   { file: "root-causes.md", minLevel: 3 },
   { file: "decisions-and-risks.md", minLevel: 3 },
+  { text: "### 4.9 Every finding in full\n\nOne entry per finding: symptom, how we found and reproduced it, root cause, fix, how we verified it, and the effect on existing data.\n" },
+  { file: "findings-01-40.md", shift: 2 },
+  { file: "findings-41-79.md", shift: 2 },
   { file: "ui.md" },
   { text: "## 6. AI usage\n" },
   { file: "ai-setup.md", minLevel: 3 },
   { file: "ai-approach.md", minLevel: 3 },
   { file: "ai-excerpts.md", minLevel: 3 },
-  { text: "## Appendix A. Every finding in full\n\nSymptom, how it was found and reproduced, root cause, fix, verification and effect on existing data, one entry per finding. The same material is in `docs/bugs/points/`.\n" },
-  { file: "findings-01-40.md", shift: 1 },
-  { file: "findings-41-79.md", shift: 1 },
   { file: "appendix.md", optional: true },
 ];
 

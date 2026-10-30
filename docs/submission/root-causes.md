@@ -1,4 +1,4 @@
-### Root causes
+### 4.7 Root causes
 
 The 79 findings come from eight underlying causes. The first one kept most of the others in place.
 

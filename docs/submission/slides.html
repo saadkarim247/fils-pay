@@ -103,7 +103,7 @@
     <div class="imgbox"><img src="img/ui/refund-partial.png" alt="Partial refund"></div>
     <div class="card"><h2>Done when…</h2><p>✓ API end to end<br>✓ Ledger right to the fil<br>✓ Fees and payouts<br>✓ Webhook<br>✓ Timeline, reports, reconciliation<br>✓ Live on Dilmune</p></div>
   </div>
-  <p style="margin-top:12px"><b>Full:</b> 25.000 BD → <code>refunded</code> · <b>Partial:</b> 15.250 of 40.000 BD → 24.750 left. Building it meant fixing 11 more bugs, including settlement paying out refunded money.</p>
+  <p style="margin-top:12px"><b>Full:</b> 25.000 BD → <code>refunded</code> · <b>Partial:</b> 15.250 of 40.000 BD → 24.750 left. Building it meant fixing 11 more bugs, including settlement paying out refunded money. Settlement nets today&#39;s refunds at 00:15 Bahrain time, once the day has ended, so the settlement report shows them in the next batch.</p>
   <div class="num">4</div>
 </section>
 
@@ -145,9 +145,9 @@
         <div class="card"><div class="big">2×</div><p>after one missing-index fix (75): 9 → 16–18/s</p></div>
         <div class="card"><div class="big">7 s</div><p>crash → back up; half-done checkouts repaired, money invariants hold</p></div>
       </div>
-      <p class="muted" style="margin-top:14px">Measured with k6 against the live box over HTTPS; money invariants checked after every run. The limit was Postgres CPU until bug 75. It is now the 20-connection pool held through the acquirer call, and the single vCPU is next.</p>
+      <p style="margin-top:12px;font-size:19px"><b>Estimated vs measured:</b> CPU cost predicted ~34 checkouts/s, the connection pool ~20–30/s. Measured: <b>20/s sustained, 21/s peak</b>, about 1,200 buyers a minute.</p><p class="muted" style="font-size:17px">k6 against the live box over HTTPS, money invariants checked after every run. The limit is now the 20-connection pool; the single vCPU is next.</p>
     </div>
-    <div class="imgbox"><img src="../perf/2026-10-30-live-capacity.png" alt="Live capacity before and after"></div>
+    <div class="imgbox"><img src="img/architecture.svg" alt="Architecture: services, ports, internet-facing"></div>
   </div>
   <div class="num">6</div>
 </section>
@@ -189,7 +189,7 @@
   <h1>Evidence</h1>
   <div class="grid2">
     <div class="imgbox"><img src="../perf/2026-10-30-checkout-capacity.png" alt="Checkout capacity"></div>
-    <div class="imgbox"><img src="../perf/2026-10-30-batch-n-plus-1.png" alt="Batch N+1 before/after"></div>
+    <div class="imgbox"><img src="../perf/2026-10-30-live-capacity.png" alt="Live capacity before and after bug 75"></div>
   </div>
   <p class="muted" style="margin-top:10px">Full findings with reproduction, verification and data impact: submission document, section 4. Load-test harness: <code>perf/checkout/</code>.</p>
   <div class="num">A</div>
