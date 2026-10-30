@@ -21,10 +21,29 @@ is gone and that secret must be treated as leaked.)
 
 ## Server (production)
 
+Public URLs: `https://<PUBLIC_HOST>` (checkout + merchant dashboard) and
+`https://admin.<PUBLIC_HOST>` (admin console). The `proxy` service (Caddy,
+`Dockerfile.proxy` + `Caddyfile`) gets Let's Encrypt certificates, serves
+the built dashboards and forwards `/v1` to the API, so each site is a
+single origin. Only ports 22, 80 and 443 are open.
+
+First time, on the server:
+
 ```bash
-OTP_DEV_EXPOSE=true ops/init-env.sh                   # once, demo box; back up ops/.env
-docker compose -f ops/docker-compose.yml up -d --build
-docker compose -f ops/docker-compose.yml --profile seed run --rm seed   # optional demo data
+bash server-setup.sh          # Docker, swap file, firewall (copy it over first)
+```
+
+From your machine (ships the committed HEAD, keeps the server's `ops/.env`):
+
+```bash
+DEPLOY_HOST=165.232.180.63 DEPLOY_USER=<user> ops/deploy.sh
+```
+
+Once, on the server, before the first deploy finishes (or after it fails asking for it):
+
+```bash
+cd ~/filspay && PUBLIC_HOST=165-232-180-63.sslip.io OTP_DEV_EXPOSE=true ops/init-env.sh   # back up ops/.env
+docker compose -p filspay -f ops/docker-compose.yml --profile seed run --rm seed          # optional demo data
 ```
 
 **OTP on the hosted demo.** The platform has no email or SMS sender: the OTP

@@ -16,6 +16,9 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(openssl rand -hex 24)}
 WEBHOOK_SECRET_ENCRYPTION_KEY=${WEBHOOK_SECRET_ENCRYPTION_KEY:-$(openssl rand -base64 32)}
 SETTLEMENT_INTERNAL_TOKEN=${SETTLEMENT_INTERNAL_TOKEN:-$(openssl rand -hex 32)}
 ACQUIRER_CALLBACK_SIGNING_SECRET=${ACQUIRER_CALLBACK_SIGNING_SECRET:-$(openssl rand -hex 32)}
+# Public hostname (Caddy gets certificates for it and admin.<it>), e.g.
+# 165-232-180-63.sslip.io; laptops leave the default.
+PUBLIC_HOST=${PUBLIC_HOST:-localhost}
 # true only on the hosted demo sandbox (no OTP delivery channel exists): see ops/README.md
 OTP_DEV_EXPOSE=${OTP_DEV_EXPOSE:-false}
 EOF

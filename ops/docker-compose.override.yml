@@ -7,6 +7,11 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  # The public TLS proxy is for the server; on a laptop the dashboards run
+  # with Vite. Start it here only with --profile proxy.
+  proxy:
+    profiles: ["proxy"]
+
   api:
     environment:
       # Dev mode: the login response shows the OTP (there is no email/SMS

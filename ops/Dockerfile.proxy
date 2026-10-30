@@ -1,0 +1,22 @@
+# Public reverse proxy: Caddy (TLS) serving the built dashboards and
+# forwarding /v1 to the API. Build context is the repo root.
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/money/package.json packages/money/
+COPY packages/events/package.json packages/events/
+COPY apps/api/package.json apps/api/
+COPY apps/reporting/package.json apps/reporting/
+COPY apps/web/package.json apps/web/
+COPY apps/admin/package.json apps/admin/
+RUN npm ci --no-audit --no-fund
+COPY . .
+# Empty base URLs: the dashboards call /v1 on their own origin, which Caddy
+# forwards to the API.
+ENV VITE_API_BASE_URL="" VITE_ADMIN_API_BASE_URL=""
+RUN npm run build -w apps/web && npm run build -w apps/admin
+
+FROM caddy:2.8-alpine
+COPY ops/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/apps/web/dist /srv/web
+COPY --from=build /app/apps/admin/dist /srv/admin

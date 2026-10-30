@@ -1,0 +1,42 @@
+# Public entry point. Caddy obtains and renews Let's Encrypt certificates for
+# both hosts automatically (port 80 must be reachable for the challenge).
+#
+#   https://{$PUBLIC_HOST}          hosted checkout + merchant dashboard (apps/web)
+#   https://admin.{$PUBLIC_HOST}    admin console (apps/admin)
+#
+# Each site proxies /v1 to the API on the internal network, so the browser
+# only ever talks to one origin: no CORS, and SameSite cookies just work.
+
+(common) {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	handle /v1/* {
+		reverse_proxy api:3000
+	}
+}
+
+{$PUBLIC_HOST} {
+	import common
+	# The web app has no page at "/"; send people to the dashboard sign-in.
+	redir / /dashboard/login
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+admin.{$PUBLIC_HOST} {
+	import common
+	handle {
+		root * /srv/admin
+		try_files {path} /index.html
+		file_server
+	}
+}

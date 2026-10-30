@@ -94,6 +94,8 @@ services:
       # once this many requests are already queued for a connection.
       PG_POOL_MAX: ${API_PG_POOL_MAX:-20}
       SETTLEMENT_INTERNAL_URL: http://settlement:8091
+      # Payment-link URLs the API hands out point at the public checkout.
+      CHECKOUT_BASE_URL: https://${PUBLIC_HOST:-localhost:5173}
       SETTLEMENT_INTERNAL_TOKEN: ${SETTLEMENT_INTERNAL_TOKEN:?run ops/init-env.sh}
       WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?run ops/init-env.sh}
       ACQUIRER_CALLBACK_SIGNING_SECRET: ${ACQUIRER_CALLBACK_SIGNING_SECRET:?run ops/init-env.sh}
@@ -162,6 +164,31 @@ services:
         limits: { cpus: "0.1", memory: 256M }
     logging: *logging
 
+  # Public entry point: TLS (Let's Encrypt), the two dashboards, /v1 -> api.
+  proxy:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile.proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in ops/.env (e.g. 165-232-180-63.sslip.io)}
+    volumes:
+      # Certificates survive recreates (Let's Encrypt rate-limits re-issuing).
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.15", memory: 96M }
+    logging: *logging
+
 volumes:
   filspay_pgdata:
   filspay_kyc:
+  caddy_data:
+  caddy_config:
