@@ -18,3 +18,8 @@ COPY apps/admin/package.json apps/admin/
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+
+# The api and reporting services run as the unprivileged `node` user. A new
+# KYC volume takes this directory's owner on first mount (an existing one
+# needs a one-time chown: see ops/README.md).
+RUN mkdir -p /data/kyc && chown node:node /data/kyc

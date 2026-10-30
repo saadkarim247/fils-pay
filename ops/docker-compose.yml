@@ -7,7 +7,10 @@
 # docker-compose.override.yml (dev mode, local ports). See ops/README.md.
 #
 # Sized for the target box: the whole stack on 1 vCPU / 2 GB RAM, with the
-# API limited to 0.5 vCPU / 512 MB. CPU limits below sum to 1.0.
+# API limited to 0.5 vCPU / 512 MB. CPU limits are per-service ceilings on
+# the one shared vCPU, not reservations, so they sum to more than 1: the
+# load test showed Postgres pinned at a 0.3 ceiling while the box was about
+# half idle (docs/perf/2026-10-30-checkout-capacity.md).
 #
 # Secrets come only from ops/.env (compose reads it automatically because
 # it sits next to this file); a missing one stops `up` with a message.
@@ -39,7 +42,7 @@ services:
       retries: 20
     deploy:
       resources:
-        limits: { cpus: "0.3", memory: 640M }
+        limits: { cpus: "0.5", memory: 640M }
     logging: *logging
 
   # One-off: applies db/migrations/*.sql (tracked by filename), then exits.
@@ -82,7 +85,11 @@ services:
     build:
       context: ..
       dockerfile: ops/Dockerfile.node
-    command: ["npx", "tsx", "apps/api/src/index.ts"]
+    # node itself, not npx: no npm/tsx wrapper processes (~140 MB), and
+    # signals reach the server directly. init reaps children (esbuild).
+    command: ["node", "--import", "tsx", "apps/api/src/index.ts"]
+    init: true
+    user: node
     restart: unless-stopped
     # Loopback only until the TLS reverse proxy fronts it.
     ports:
@@ -152,7 +159,9 @@ services:
       context: ..
       dockerfile: ops/Dockerfile.node
     # No subcommand = the long-running worker.
-    command: ["npx", "tsx", "apps/reporting/src/index.ts"]
+    command: ["node", "--import", "tsx", "apps/reporting/src/index.ts"]
+    init: true
+    user: node
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -166,6 +175,29 @@ services:
     deploy:
       resources:
         limits: { cpus: "0.1", memory: 256M }
+    logging: *logging
+
+  # Nightly pg_dump at 23:30 UTC (02:30 Bahrain) into its own volume, 7 days
+  # kept. Same disk as the database: it guards against mistakes and bad
+  # migrations, not against losing the box. Restore: see ops/README.md.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    command: ["sh", "/ops/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: filspay
+      PGDATABASE: filspay
+      PGPASSWORD: ${POSTGRES_PASSWORD:?run ops/init-env.sh to create ops/.env}
+    volumes:
+      - ./backup.sh:/ops/backup.sh:ro
+      - filspay_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.1", memory: 64M }
     logging: *logging
 
   # Public entry point: TLS (Let's Encrypt), the two dashboards, /v1 -> api.
@@ -196,3 +228,4 @@ volumes:
   filspay_kyc:
   caddy_data:
   caddy_config:
+  filspay_backups:
