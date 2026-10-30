@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { isBlockedHostLiteral } from "./networkPolicy.js";
 import type { Config } from "../config.js";
 import { randomToken } from "../lib/crypto.js";
 import { BadRequestError } from "../lib/errors.js";
@@ -10,8 +11,6 @@ import { decodeEncryptionKey, encryptSecret } from "./secretCrypto.js";
  * (http is permitted otherwise so a local http.createServer test receiver
  * and a merchant's own localhost dev setup both work).
  */
-// MK: https-only in prod is our SSRF protection
-// used to block localhost in dev too, removed for the local receiver — am
 export function validateWebhookUrl(rawUrl: string, config: Pick<Config, "nodeEnv">): URL {
   let parsed: URL;
   try {
@@ -23,6 +22,12 @@ export function validateWebhookUrl(rawUrl: string, config: Pick<Config, "nodeEnv
     throw new BadRequestError("invalid_url");
   }
   if (config.nodeEnv === "production" && parsed.protocol !== "https:") {
+    throw new BadRequestError("invalid_url");
+  }
+  // https alone is not SSRF protection: in production the host must not be
+  // localhost or a private, loopback, link-local or reserved address. (The
+  // transport re-checks the resolved address at send time.)
+  if (config.nodeEnv === "production" && isBlockedHostLiteral(parsed.hostname)) {
     throw new BadRequestError("invalid_url");
   }
   return parsed;
