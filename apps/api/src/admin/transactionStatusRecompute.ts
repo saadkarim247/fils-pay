@@ -35,7 +35,13 @@ export async function recomputeTransactionStatusesForMerchant(
   // statement (one UPDATE per changed row was an N+1).
   const changedIds: string[] = [];
   const changedStatuses: string[] = [];
-  let openAuthorizations = 0;
+  // Counted on their own: the candidates above exclude authorized rows, so
+  // counting among them always gave 0 (bug 78).
+  const open = await client.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM transactions WHERE merchant_id = $1 AND status = 'authorized'`,
+    [merchantId],
+  );
+  const openAuthorizations = open.rows[0]?.n ?? 0;
 
   for (const row of candidates.rows) {
     const next = nextStatusAfterRefund({
@@ -47,7 +53,6 @@ export async function recomputeTransactionStatusesForMerchant(
       changedIds.push(row.id);
       changedStatuses.push(next);
     }
-    if (row.status === "authorized") openAuthorizations += 1;
   }
   if (changedIds.length > 0) {
     await client.query(
